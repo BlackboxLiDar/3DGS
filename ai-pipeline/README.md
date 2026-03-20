@@ -19,6 +19,9 @@
 1. 3D Gaussian Splatting 학습 (마스크 loss 제외)
 1. .splat 변환
 
+## 최종 파이프라인 메모리
+상세 파이프라인 정의는 `/Users/kyu216/projects/3DGS/ai-pipeline/PIPELINE_MEMORY.md`에 정리되어 있습니다.
+
 ## 폴더 구조
 ```text
 /Users/kyu216/projects/3DGS/ai-pipeline
