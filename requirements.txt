@@ -12,6 +12,7 @@ tensorflow
 
 # Detection / Tracking
 ultralytics
+lap>=0.5.12
 
 # Depth / 3DGS (CPU by default; replace with CUDA wheels on server as needed)
 torch

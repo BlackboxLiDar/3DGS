@@ -3,6 +3,7 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+*.pt
 node_modules/
 /ai-pipeline/data/
 /ai-pipeline/outputs/

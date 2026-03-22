@@ -38,7 +38,7 @@
 │   ├── 10_3dgs
 │   ├── 11_format
 │   ├── 12_viewer
-│   └── frame_extraction.py
+│   └── pipeline
 ├── scripts    # 실행 스크립트
 ├── configs    # 설정 파일
 ├── data       # 샘플/중간 데이터
@@ -58,5 +58,6 @@ Waymo TFRecord (전방 카메라, 10fps 기본)
 `colmap` (카메라 포즈 추정)
 
 ## 현재 상태
-- 프레임 추출 스크립트 구현
-- 나머지 파이프라인 구현 진행 예정
+- **Stage 02 (Ingest):** 구현 완료 — video/Waymo 프레임 추출
+- **Stage 03 (Seg & Tracking):** 구현 완료 — YOLOv8-seg + ByteTrack + ego-motion 보정 + state back-propagation
+- Stage 04~12: 구현 예정
