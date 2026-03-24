@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.6.3-devel-ubuntu22.04
+FROM nvidia/cuda:12.8.1-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
 RUN git clone https://github.com/colmap/colmap.git /tmp/colmap && \
     cd /tmp/colmap && git checkout 3.11.1 && \
     mkdir build && cd build && \
-    cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES=all && \
+    cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES="86;89;100" && \
     ninja -j$(nproc) && ninja install && \
     rm -rf /tmp/colmap
 
@@ -29,7 +29,7 @@ RUN git clone https://github.com/colmap/colmap.git /tmp/colmap && \
 WORKDIR /workspace
 RUN pip3 install --no-cache-dir \
     torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu126
+    --index-url https://download.pytorch.org/whl/cu128
 
 # Python dependencies
 COPY requirements.txt .
