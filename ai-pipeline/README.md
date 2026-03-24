@@ -57,7 +57,24 @@ Waymo TFRecord (전방 카메라, 10fps 기본)
 `ffmpeg` (영상 프레임 추출)
 `colmap` (카메라 포즈 추정)
 
+## Docker (GPU 서버 실행)
+
+```bash
+# 빌드 (최초 1회, COLMAP CUDA 빌드 포함 ~20-30분)
+docker compose build
+
+# 파이프라인 실행
+docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord
+
+# 특정 스테이지만 실행
+docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord --steps 02_ingest 03_seg 04_colmap
+
+# GPU 확인
+docker compose run --entrypoint python3 pipeline -c "import torch; print('CUDA:', torch.cuda.is_available())"
+```
+
 ## 현재 상태
 - **Stage 02 (Ingest):** 구현 완료 — video/Waymo 프레임 추출
 - **Stage 03 (Seg & Tracking):** 구현 완료 — YOLOv8-seg + ByteTrack + ego-motion 보정 + state back-propagation
-- Stage 04~12: 구현 예정
+- **Stage 04 (COLMAP):** 구현 완료 — COLMAP SfM (feature extraction → matching → mapping), GPU 자동 감지, 등록 프레임 서브샘플링
+- Stage 05~12: 구현 예정

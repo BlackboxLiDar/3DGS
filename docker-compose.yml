@@ -1,0 +1,10 @@
+services:
+  pipeline:
+    build: .
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ./ai-pipeline/data:/workspace/ai-pipeline/data
+      - ./ai-pipeline/outputs:/workspace/ai-pipeline/outputs
+    working_dir: /workspace
