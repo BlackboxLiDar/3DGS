@@ -10,17 +10,14 @@ def _add_src_to_path():
 
 
 def _setup_gpu():
-    """Disable cuDNN if it fails to initialize (e.g. Blackwell GPUs)."""
+    """Disable cuDNN for Blackwell GPUs (compute >= 12.0) where cuDNN is not yet supported."""
     try:
         import torch
         if torch.cuda.is_available():
-            try:
-                # Test cuDNN with a small tensor
-                x = torch.randn(1, 1, 3, 3, device="cuda")
-                torch.nn.functional.conv2d(x, torch.randn(1, 1, 1, 1, device="cuda"))
-            except RuntimeError:
+            cap = torch.cuda.get_device_capability()
+            if cap[0] >= 12:
                 torch.backends.cudnn.enabled = False
-                print("cuDNN disabled (unsupported GPU arch), using native CUDA kernels")
+                print(f"cuDNN disabled (compute {cap[0]}.{cap[1]}), using native CUDA kernels")
     except ImportError:
         pass
 
