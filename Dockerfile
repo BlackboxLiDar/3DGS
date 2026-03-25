@@ -28,13 +28,13 @@ RUN git clone https://github.com/colmap/colmap.git /tmp/colmap && \
 # PyTorch with CUDA (install before requirements.txt to avoid CPU override)
 WORKDIR /workspace
 RUN pip3 install --no-cache-dir \
-    torch torchvision torchaudio \
+    torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
     --index-url https://download.pytorch.org/whl/cu118
 
 # Python dependencies
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir \
-    --ignore-installed torch torchvision torchaudio \
+    --ignore-installed torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
     -r requirements.txt
 
 # Copy project
