@@ -4,7 +4,7 @@ services:
     runtime: nvidia
     shm_size: '8g'
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_VISIBLE_DEVICES=0
       - TF_FORCE_GPU_ALLOW_GROWTH=true
     volumes:
       - ./ai-pipeline/data:/workspace/ai-pipeline/data
