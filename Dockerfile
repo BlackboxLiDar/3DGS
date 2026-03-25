@@ -33,7 +33,8 @@ RUN pip3 install --no-cache-dir \
 
 # Python dependencies
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir \
+RUN pip3 install --no-cache-dir "numpy>=1.24,<2" && \
+    pip3 install --no-cache-dir \
     --ignore-installed torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
     -r requirements.txt
 

@@ -1,5 +1,5 @@
 # Core
-numpy
+numpy>=1.24,<2
 protobuf
 grpcio-tools
 tqdm
