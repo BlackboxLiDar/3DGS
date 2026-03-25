@@ -9,6 +9,7 @@ scipy
 
 # Waymo TFRecord parsing
 tensorflow
+waymo-open-dataset-tf-2-12-0
 
 # Detection / Tracking
 ultralytics

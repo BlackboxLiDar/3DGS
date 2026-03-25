@@ -1,20 +1,6 @@
 import os
-import sys
 from pathlib import Path
 from typing import Optional, Union
-
-
-def _setup_waymo_import(repo_root: Optional[Path] = None) -> Path:
-    if repo_root is None:
-        repo_root = Path(__file__).resolve().parents[3]
-    waymo_src = repo_root / "third_party" / "waymo-open-dataset" / "src"
-    if not waymo_src.exists():
-        raise FileNotFoundError(
-            f"Waymo repo not found at {waymo_src}. "
-            "Clone it into ai-pipeline/third_party/waymo-open-dataset."
-        )
-    sys.path.insert(0, str(waymo_src))
-    return waymo_src
 
 
 def extract_waymo_front_frames(
@@ -24,8 +10,6 @@ def extract_waymo_front_frames(
     max_frames: Optional[int] = None,
 ) -> dict:
     os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
-
-    _setup_waymo_import()
 
     import tensorflow as tf
     from waymo_open_dataset import dataset_pb2 as open_dataset
