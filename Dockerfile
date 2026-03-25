@@ -29,7 +29,7 @@ RUN git clone https://github.com/colmap/colmap.git /tmp/colmap && \
 WORKDIR /workspace
 RUN pip3 install --no-cache-dir \
     torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu121
+    --index-url https://download.pytorch.org/whl/cu118
 
 # Python dependencies
 COPY requirements.txt .
