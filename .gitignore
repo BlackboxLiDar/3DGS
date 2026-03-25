@@ -9,3 +9,4 @@ node_modules/
 /ai-pipeline/outputs/
 /ai-pipeline/third_party/
 CLAUDE.md
+tools/

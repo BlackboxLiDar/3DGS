@@ -34,7 +34,7 @@ RUN pip3 install --no-cache-dir \
 # Python dependencies
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir \
-    --ignore-installed torch torchvision torchaudio \
+    --ignore-installed torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
     -r requirements.txt
 
 # Copy project
