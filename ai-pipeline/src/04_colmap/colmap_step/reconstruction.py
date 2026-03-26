@@ -35,16 +35,15 @@ def _run_colmap_cmd(cmd, log_path=None):
 
 
 def prepare_masks_for_colmap(source_masks_dir, colmap_masks_dir, images_dir):
-    """Invert and rename masks for COLMAP convention.
+    """Create symlinks with COLMAP naming convention.
 
     Stage 03 outputs: white(255)=dynamic, black(0)=static
-    COLMAP expects:   white(255)=extract features, black(0)=ignore
+    COLMAP 3.11:      white(non-zero)=ignore, black(0)=extract features
+    Convention aligns: dynamic objects are ignored, static background is used.
 
-    So we invert: static background becomes white (extract), dynamic becomes black (ignore).
-    COLMAP expects mask files named {image_filename}.png (e.g., frame_000001.jpg.png).
+    COLMAP expects mask files named {image_filename}.png
+    (e.g., frame_000001.jpg.png), but Stage 03 outputs frame_000001.png.
     """
-    import cv2
-
     colmap_masks_dir = Path(colmap_masks_dir)
     colmap_masks_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,13 +51,13 @@ def prepare_masks_for_colmap(source_masks_dir, colmap_masks_dir, images_dir):
     for img_path in sorted(Path(images_dir).glob("*.jpg")):
         src_mask = Path(source_masks_dir) / f"{img_path.stem}.png"
         if src_mask.exists():
-            mask = cv2.imread(str(src_mask), cv2.IMREAD_GRAYSCALE)
-            inverted = 255 - mask
             dst = colmap_masks_dir / f"{img_path.name}.png"
-            cv2.imwrite(str(dst), inverted)
+            if dst.exists() or dst.is_symlink():
+                dst.unlink()
+            dst.symlink_to(src_mask.resolve())
             count += 1
 
-    logger.info("Prepared %d inverted masks in %s", count, colmap_masks_dir)
+    logger.info("Prepared %d mask symlinks in %s", count, colmap_masks_dir)
 
 
 def run_feature_extractor(db_path, image_path, mask_path, use_gpu=False, log_path=None, camera_params=None):
