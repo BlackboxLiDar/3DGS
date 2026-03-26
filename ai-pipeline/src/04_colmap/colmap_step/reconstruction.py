@@ -65,7 +65,7 @@ def run_feature_extractor(db_path, image_path, mask_path, use_gpu=False, log_pat
         "--ImageReader.mask_path", str(mask_path),
         "--ImageReader.single_camera", "1",
         "--ImageReader.camera_model", "PINHOLE",
-        "--FeatureExtraction.use_gpu", "1" if use_gpu else "0",
+        "--SiftExtraction.use_gpu", "1" if use_gpu else "0",
         "--SiftExtraction.max_num_features", "8192",
     ]
 
@@ -74,7 +74,7 @@ def run_feature_extractor(db_path, image_path, mask_path, use_gpu=False, log_pat
     except subprocess.CalledProcessError:
         if use_gpu:
             logger.warning("GPU feature extraction failed, retrying with CPU")
-            gpu_idx = cmd.index("--FeatureExtraction.use_gpu")
+            gpu_idx = cmd.index("--SiftExtraction.use_gpu")
             cmd[gpu_idx + 1] = "0"
             _run_colmap_cmd(cmd, log_path)
         else:
@@ -88,7 +88,7 @@ def run_sequential_matcher(db_path, use_gpu=False, log_path=None):
         "--database_path", str(db_path),
         "--SequentialMatching.overlap", "10",
         "--SequentialMatching.loop_detection", "0",
-        "--FeatureMatching.use_gpu", "1" if use_gpu else "0",
+        "--SiftMatching.use_gpu", "1" if use_gpu else "0",
     ]
 
     try:
@@ -96,7 +96,7 @@ def run_sequential_matcher(db_path, use_gpu=False, log_path=None):
     except subprocess.CalledProcessError:
         if use_gpu:
             logger.warning("GPU matching failed, retrying with CPU")
-            gpu_idx = cmd.index("--FeatureMatching.use_gpu")
+            gpu_idx = cmd.index("--SiftMatching.use_gpu")
             cmd[gpu_idx + 1] = "0"
             _run_colmap_cmd(cmd, log_path)
         else:
