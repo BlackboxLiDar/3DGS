@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 from typing import Optional, Union
@@ -29,6 +30,21 @@ def extract_waymo_front_frames(
     first_frame = open_dataset.Frame()
     first_frame.ParseFromString(bytearray(first.numpy()))
     scene_name = first_frame.context.name or tfrecord_path.stem
+
+    # Extract FRONT camera intrinsics from calibration
+    waymo_intrinsics = None
+    for cal in first_frame.context.camera_calibrations:
+        if cal.name == open_dataset.CameraName.FRONT:
+            intrinsic = list(cal.intrinsic)  # [f_u, f_v, c_u, c_v, k1, k2, p1, p2, k3]
+            waymo_intrinsics = {
+                "fx": intrinsic[0], "fy": intrinsic[1],
+                "cx": intrinsic[2], "cy": intrinsic[3],
+                "k1": intrinsic[4], "k2": intrinsic[5],
+                "p1": intrinsic[6], "p2": intrinsic[7],
+                "k3": intrinsic[8] if len(intrinsic) > 8 else 0.0,
+                "width": cal.width, "height": cal.height,
+            }
+            break
 
     if out_dir is None:
         repo_root = Path(__file__).resolve().parents[3]
@@ -78,9 +94,17 @@ def extract_waymo_front_frames(
         if max_frames is not None and idx >= max_frames:
             break
 
-    return {
+    result = {
         "scene_name": scene_name,
         "total_frames": total,
         "extracted_frames": extracted,
         "out_dir": str(out_dir),
     }
+
+    if waymo_intrinsics:
+        intrinsics_path = out_dir.parent / "intrinsics_waymo.json"
+        with open(intrinsics_path, "w") as f:
+            json.dump(waymo_intrinsics, f, indent=2)
+        result["waymo_intrinsics"] = waymo_intrinsics
+
+    return result

@@ -31,6 +31,15 @@ def run(context):
         )
         context["artifacts"]["images_colmap"] = result["out_dir"]
         context["artifacts"]["scene_name"] = result["scene_name"]
+        if "waymo_intrinsics" in result:
+            context["artifacts"]["waymo_intrinsics"] = result["waymo_intrinsics"]
+            logger.info(
+                "Waymo intrinsics: fx=%.1f fy=%.1f cx=%.1f cy=%.1f",
+                result["waymo_intrinsics"]["fx"],
+                result["waymo_intrinsics"]["fy"],
+                result["waymo_intrinsics"]["cx"],
+                result["waymo_intrinsics"]["cy"],
+            )
         logger.info(
             "Waymo extraction complete: %d frames -> %s",
             result["extracted_frames"],
