@@ -141,10 +141,12 @@ def filter_points_by_bboxes(text_dir, bbox_sequence_path, intrinsics):
 
     original_count = len(points)
     filtered_points = []
+    bbox_hit_threshold = 0.5  # Remove only if >50% of observing frames hit a bbox
 
     for point in points:
         xyz = np.array(point["xyz"])
-        remove = False
+        checked = 0
+        hits = 0
 
         for image_id, _ in point["track"]:
             name = id_to_name.get(image_id)
@@ -155,10 +157,6 @@ def filter_points_by_bboxes(text_dir, bbox_sequence_path, intrinsics):
             if frame_idx is None:
                 continue
 
-            bboxes = bboxes_by_frame_idx.get(frame_idx, [])
-            if not bboxes:
-                continue
-
             w2c = w2c_by_name.get(name)
             if w2c is None:
                 continue
@@ -167,12 +165,14 @@ def filter_points_by_bboxes(text_dir, bbox_sequence_path, intrinsics):
             if proj is None:
                 continue
 
-            u, v = proj
-            if _point_in_any_bbox(u, v, bboxes):
-                remove = True
-                break
+            checked += 1
+            bboxes = bboxes_by_frame_idx.get(frame_idx, [])
+            if bboxes and _point_in_any_bbox(u=proj[0], v=proj[1], bboxes=bboxes):
+                hits += 1
 
-        if not remove:
+        # Remove only if majority of observing frames have the point inside a bbox
+        hit_rate = hits / checked if checked > 0 else 0
+        if hit_rate <= bbox_hit_threshold:
             filtered_points.append(point)
 
     # Overwrite points3D.txt
