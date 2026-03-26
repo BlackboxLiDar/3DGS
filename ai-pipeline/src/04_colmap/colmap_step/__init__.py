@@ -107,21 +107,9 @@ def run(context):
     camera_params = parse_cameras_txt(text_dir / "cameras.txt")
     image_poses = parse_images_txt(text_dir / "images.txt")
 
-    # 4. Filter sparse PC: remove 3D points inside vehicle bboxes
-    bbox_sequence_path = context["artifacts"].get("bbox_sequence")
-    if bbox_sequence_path and Path(bbox_sequence_path).exists():
-        logger.info("Step 4: Filtering sparse points by vehicle bboxes...")
-        orig, filtered = filter_points_by_bboxes(
-            text_dir, bbox_sequence_path, camera_params,
-        )
-        if orig > 0:
-            # Re-export PLY from filtered text model
-            sparse_ply = workspace / "sparse.ply"
-            log_path = workspace / "colmap.log"
-            run_model_converter_to_ply(text_dir, sparse_ply, log_path)
-            logger.info("Re-exported filtered sparse PLY -> %s", sparse_ply)
-    else:
-        logger.info("Step 4: No bbox_sequence found, skipping point filtering")
+    # 4. Point filtering (disabled — needs threshold tuning)
+    # TODO: Re-enable after fixing over-aggressive filtering
+    logger.info("Step 4: Point filtering skipped (disabled)")
 
     # 5. Save poses, intrinsics, registered frames
     sorted_names = sorted(image_poses.keys())
