@@ -56,18 +56,27 @@ def prepare_masks_for_colmap(source_masks_dir, colmap_masks_dir, images_dir):
     logger.info("Prepared %d mask symlinks in %s", count, colmap_masks_dir)
 
 
-def run_feature_extractor(db_path, image_path, mask_path, use_gpu=False, log_path=None):
+def run_feature_extractor(db_path, image_path, mask_path, use_gpu=False, log_path=None, camera_params=None):
     """Run colmap feature_extractor with mask support."""
+    if camera_params:
+        camera_model = "OPENCV"
+        params_str = ",".join(str(camera_params[k]) for k in ["fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2"])
+    else:
+        camera_model = "PINHOLE"
+        params_str = None
+
     cmd = [
         "colmap", "feature_extractor",
         "--database_path", str(db_path),
         "--image_path", str(image_path),
         "--ImageReader.mask_path", str(mask_path),
         "--ImageReader.single_camera", "1",
-        "--ImageReader.camera_model", "PINHOLE",
+        "--ImageReader.camera_model", camera_model,
         "--SiftExtraction.use_gpu", "1" if use_gpu else "0",
         "--SiftExtraction.max_num_features", "8192",
     ]
+    if params_str:
+        cmd += ["--ImageReader.camera_params", params_str]
 
     try:
         _run_colmap_cmd(cmd, log_path)
@@ -86,7 +95,7 @@ def run_sequential_matcher(db_path, use_gpu=False, log_path=None):
     cmd = [
         "colmap", "sequential_matcher",
         "--database_path", str(db_path),
-        "--SequentialMatching.overlap", "10",
+        "--SequentialMatching.overlap", "20",
         "--SequentialMatching.loop_detection", "0",
         "--SiftMatching.use_gpu", "1" if use_gpu else "0",
     ]
@@ -103,7 +112,7 @@ def run_sequential_matcher(db_path, use_gpu=False, log_path=None):
             raise
 
 
-def run_mapper(db_path, image_path, output_path, log_path=None):
+def run_mapper(db_path, image_path, output_path, log_path=None, fix_intrinsics=False):
     """Run colmap mapper (incremental SfM)."""
     output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -114,6 +123,12 @@ def run_mapper(db_path, image_path, output_path, log_path=None):
         "--image_path", str(image_path),
         "--output_path", str(output_path),
     ]
+    if fix_intrinsics:
+        cmd += [
+            "--Mapper.ba_refine_focal_length", "0",
+            "--Mapper.ba_refine_principal_point", "0",
+            "--Mapper.ba_refine_extra_params", "0",
+        ]
     _run_colmap_cmd(cmd, log_path)
 
 
@@ -142,7 +157,7 @@ def run_model_converter_to_ply(input_path, output_path, log_path=None):
     _run_colmap_cmd(cmd, log_path)
 
 
-def run_colmap_pipeline(images_dir, masks_dir, workspace, use_gpu=False):
+def run_colmap_pipeline(images_dir, masks_dir, workspace, use_gpu=False, camera_params=None):
     """Run the full COLMAP SfM pipeline.
 
     Returns path to the best reconstruction directory (sparse/0/).
@@ -157,13 +172,13 @@ def run_colmap_pipeline(images_dir, masks_dir, workspace, use_gpu=False):
         db_path.unlink()
 
     logger.info("Step 1/5: Feature extraction...")
-    run_feature_extractor(db_path, images_dir, masks_dir, use_gpu, log_path)
+    run_feature_extractor(db_path, images_dir, masks_dir, use_gpu, log_path, camera_params=camera_params)
 
     logger.info("Step 2/5: Sequential matching...")
     run_sequential_matcher(db_path, use_gpu, log_path)
 
     logger.info("Step 3/5: Mapper (incremental SfM)...")
-    run_mapper(db_path, images_dir, sparse_dir, log_path)
+    run_mapper(db_path, images_dir, sparse_dir, log_path, fix_intrinsics=(camera_params is not None))
 
     # Find the best reconstruction (sparse/0 is typically the largest)
     recon_dirs = sorted(sparse_dir.iterdir()) if sparse_dir.exists() else []
