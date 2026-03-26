@@ -87,8 +87,16 @@ def run(context):
 
     # 2. Run COLMAP pipeline (feature extraction, matching, mapping)
     logger.info("Step 2: Running COLMAP SfM pipeline...")
+    waymo_intrinsics = context["artifacts"].get("waymo_intrinsics")
+    if waymo_intrinsics:
+        logger.info(
+            "Using Waymo known intrinsics: fx=%.1f fy=%.1f cx=%.1f cy=%.1f",
+            waymo_intrinsics["fx"], waymo_intrinsics["fy"],
+            waymo_intrinsics["cx"], waymo_intrinsics["cy"],
+        )
     model_dir = run_colmap_pipeline(
         images_dir, colmap_masks, workspace, use_gpu=_GPU_AVAILABLE,
+        camera_params=waymo_intrinsics,
     )
 
     # 3. Parse results
