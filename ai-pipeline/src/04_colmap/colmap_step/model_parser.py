@@ -43,6 +43,8 @@ def parse_cameras_txt(cameras_path):
             elif model == "SIMPLE_PINHOLE":
                 f, cx, cy = params[:3]
                 fx = fy = f
+            elif model == "OPENCV":
+                fx, fy, cx, cy = params[:4]
             else:
                 raise ValueError(f"Unsupported camera model: {model}")
 
@@ -55,6 +57,11 @@ def parse_cameras_txt(cameras_path):
                 "cx": cx,
                 "cy": cy,
             }
+            if model == "OPENCV" and len(params) >= 8:
+                result["k1"] = params[4]
+                result["k2"] = params[5]
+                result["p1"] = params[6]
+                result["p2"] = params[7]
             logger.info(
                 "Camera: %s %dx%d, fx=%.1f fy=%.1f cx=%.1f cy=%.1f",
                 model, width, height, fx, fy, cx, cy,
