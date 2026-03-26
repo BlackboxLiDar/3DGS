@@ -36,7 +36,8 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir "numpy>=1.24,<2" && \
     pip3 install --no-cache-dir \
     --ignore-installed torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
-    -r requirements.txt
+    -r requirements.txt && \
+    pip3 install --no-cache-dir --no-build-isolation waymo-open-dataset-tf-2-12-0
 
 # Copy project
 COPY . .

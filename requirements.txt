@@ -9,7 +9,7 @@ scipy
 
 # Waymo TFRecord parsing
 tensorflow
-waymo-open-dataset-tf-2-12-0
+# waymo-open-dataset-tf-2-12-0 installed separately in Dockerfile (needs --no-build-isolation)
 
 # Detection / Tracking
 ultralytics
