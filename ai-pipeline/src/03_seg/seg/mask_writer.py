@@ -47,12 +47,17 @@ def write_masks(frame_paths, all_frame_detections, track_states, out_dir):
             mask_region = det.mask_crop[:actual_h, :actual_w]
             mask_img[y1 : y1 + actual_h, x1 : x1 + actual_w][mask_region] = 255
 
+        # Dilate mask to cover boundary leakage (7px expansion)
+        if mask_img.any():
+            kernel = np.ones((15, 15), np.uint8)
+            mask_img = cv2.dilate(mask_img, kernel, iterations=1)
+
         # Save with same stem as input frame
         stem = Path(fd.frame_name).stem
         out_path = out_dir / f"{stem}.png"
         cv2.imwrite(str(out_path), mask_img)
 
-    logger.info("Masks written: %d files -> %s", len(all_frame_detections), out_dir)
+    logger.info("Masks written (dilated 7px): %d files -> %s", len(all_frame_detections), out_dir)
     return str(out_dir)
 
 

@@ -112,6 +112,89 @@ def parse_images_txt(images_path):
     return poses
 
 
+def parse_points3D_txt(points3d_path):
+    """Parse COLMAP points3D.txt.
+
+    Each line: POINT3D_ID X Y Z R G B ERROR TRACK[] (IMAGE_ID POINT2D_IDX pairs)
+
+    Returns list of dicts with keys: point3d_id, xyz, rgb, error, track.
+    track is list of (image_id, point2d_idx) tuples.
+    """
+    points3d_path = Path(points3d_path)
+    points = []
+
+    with open(points3d_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            parts = line.split()
+            point3d_id = int(parts[0])
+            xyz = [float(parts[1]), float(parts[2]), float(parts[3])]
+            rgb = [int(parts[4]), int(parts[5]), int(parts[6])]
+            error = float(parts[7])
+
+            track = []
+            for i in range(8, len(parts), 2):
+                image_id = int(parts[i])
+                point2d_idx = int(parts[i + 1])
+                track.append((image_id, point2d_idx))
+
+            points.append({
+                "point3d_id": point3d_id,
+                "xyz": xyz,
+                "rgb": rgb,
+                "error": error,
+                "track": track,
+            })
+
+    logger.info("Parsed %d 3D points from %s", len(points), points3d_path)
+    return points
+
+
+def write_points3D_txt(points, out_path):
+    """Write COLMAP points3D.txt format."""
+    out_path = Path(out_path)
+    with open(out_path, "w") as f:
+        f.write("# 3D point list with one line of data per point:\n")
+        f.write("#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n")
+        f.write(f"# Number of points: {len(points)}\n")
+
+        for p in points:
+            track_str = " ".join(
+                f"{img_id} {pt_idx}" for img_id, pt_idx in p["track"]
+            )
+            f.write(
+                f"{p['point3d_id']} {p['xyz'][0]} {p['xyz'][1]} {p['xyz'][2]} "
+                f"{p['rgb'][0]} {p['rgb'][1]} {p['rgb'][2]} {p['error']} "
+                f"{track_str}\n"
+            )
+
+    logger.info("Wrote %d 3D points to %s", len(points), out_path)
+
+
+def parse_images_txt_with_ids(images_path):
+    """Parse COLMAP images.txt, returning image_id -> filename mapping.
+
+    Unlike parse_images_txt(), this returns a dict of {image_id: filename}
+    for use in point filtering (points3D.txt references image_id).
+    """
+    images_path = Path(images_path)
+    id_to_name = {}
+
+    with open(images_path) as f:
+        lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+
+    for i in range(0, len(lines), 2):
+        parts = lines[i].split()
+        image_id = int(parts[0])
+        name = parts[9]
+        id_to_name[image_id] = name
+
+    return id_to_name
+
+
 def save_poses(image_poses, sorted_names, out_path):
     """Save camera-to-world poses as (M, 4, 4) numpy array.
 
