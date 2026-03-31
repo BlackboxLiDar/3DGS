@@ -69,6 +69,59 @@
 └── README.md
 ```
 
+## 실행 방법
+
+### 의존성 설치
+
+```bash
+pip install -r requirements.txt
+```
+
+시스템 의존성: `ffmpeg` (프레임 추출), `colmap` (카메라 포즈 추정 — Stage 04)
+
+Waymo 입력 사용 시: `ai-pipeline/third_party/waymo-open-dataset/`에 waymo-open-dataset 클론 후 `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` 환경변수 설정
+
+### 파이프라인 실행
+
+```bash
+# 전체 파이프라인 실행
+python ai-pipeline/scripts/run_pipeline.py --input <video.mp4 or scene.tfrecord>
+
+# 특정 스테이지만 실행
+python ai-pipeline/src/pipeline/run_pipeline.py --input <input> --steps 02_ingest 03_seg
+
+# Dry run (실행 계획만 확인)
+python ai-pipeline/src/pipeline/run_pipeline.py --input <input> --dry_run
+```
+
+### 프레임 추출
+
+```bash
+# 일반 영상에서 프레임 추출
+python ai-pipeline/scripts/extract_video_frames.py --video <path> [--out_dir <dir>] [--fps 10] [--quality 2]
+
+# Waymo 전방 카메라 프레임 추출
+python ai-pipeline/scripts/extract_waymo_front_frames.py --tfrecord <path> [--every_n 1] [--max_frames N]
+```
+
+### Docker (GPU 서버)
+
+```bash
+# 빌드 (최초 1회, ~20-30분 — COLMAP CUDA 빌드 포함)
+docker compose build
+
+# 파이프라인 실행
+docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord
+
+# 특정 스테이지 실행
+docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord --steps 02_ingest 03_seg 04_colmap
+
+# GPU 확인
+docker compose run --entrypoint python3 pipeline -c "import torch; print('CUDA:', torch.cuda.is_available())"
+```
+
+데이터와 출력은 볼륨 마운트(`ai-pipeline/data/`, `ai-pipeline/outputs/`)되어 호스트에 유지됩니다.
+
 ## 현재 상태
 - 파이프라인 설계 및 문서화 단계
 - 코드 구현은 아직 시작하지 않음
