@@ -88,7 +88,7 @@ Waymo 입력 사용 시: `ai-pipeline/third_party/waymo-open-dataset/`에 waymo-
 python ai-pipeline/scripts/run_pipeline.py --input <video.mp4 or scene.tfrecord>
 
 # 특정 스테이지만 실행
-python ai-pipeline/src/pipeline/run_pipeline.py --input <input> --steps 02_ingest 03_seg
+python ai-pipeline/src/pipeline/run_pipeline.py --input <input> --steps 02_ingest,03_seg
 
 # Dry run (실행 계획만 확인)
 python ai-pipeline/src/pipeline/run_pipeline.py --input <input> --dry_run
@@ -114,7 +114,7 @@ docker compose build
 docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord
 
 # 특정 스테이지 실행
-docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord --steps 02_ingest 03_seg 04_colmap
+docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord --steps 02_ingest,03_seg,04_colmap
 
 # GPU 확인
 docker compose run --entrypoint python3 pipeline -c "import torch; print('CUDA:', torch.cuda.is_available())"
