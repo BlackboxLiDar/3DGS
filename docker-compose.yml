@@ -10,4 +10,6 @@ services:
       - ./ai-pipeline/data:/workspace/ai-pipeline/data
       - ./ai-pipeline/outputs:/workspace/ai-pipeline/outputs
       - ./ai-pipeline/third_party:/workspace/ai-pipeline/third_party
+      - ./ai-pipeline/src:/workspace/ai-pipeline/src
+      - ./ai-pipeline/scripts:/workspace/ai-pipeline/scripts
     working_dir: /workspace
