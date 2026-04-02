@@ -19,6 +19,7 @@ lap>=0.5.12
 torch
 torchvision
 torchaudio
+transformers
 
 # Point cloud processing
 open3d

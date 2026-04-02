@@ -1,8 +1,10 @@
 import argparse
+import copy
 import importlib
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -102,6 +104,29 @@ def _setup_logging(out_root: Path) -> None:
     root_logger.addHandler(file_handler)
 
 
+def _run_parallel(step_names: list[str], context: dict) -> dict:
+    """Execute multiple stages concurrently and merge their artifacts."""
+
+    def _run_one(step_name: str):
+        module_path = STAGE_MODULES[step_name]
+        module = importlib.import_module(module_path)
+        if not hasattr(module, "run"):
+            raise NotImplementedError(f"{module_path}.run is not implemented.")
+        logger.info("--- Running %s (%s) [parallel] ---", step_name, module_path)
+        ctx = copy.deepcopy(context)
+        ctx = module.run(ctx)
+        return step_name, ctx["artifacts"]
+
+    with ThreadPoolExecutor(max_workers=len(step_names)) as pool:
+        futures = {pool.submit(_run_one, name): name for name in step_names}
+        for future in as_completed(futures):
+            step_name, artifacts = future.result()
+            context["artifacts"].update(artifacts)
+            logger.info("--- %s finished [parallel] ---", step_name)
+
+    return context
+
+
 def main() -> None:
     args = _parse_args()
     input_path = Path(args.input).expanduser().resolve()
@@ -140,17 +165,41 @@ def main() -> None:
     if src_root not in sys.path:
         sys.path.insert(0, src_root)
 
-    for step in steps:
+    # Steps that can run in parallel (they share no input/output dependencies).
+    # Each set is executed concurrently when ALL members appear consecutively
+    # in the step list.  Their artifact dicts are merged after completion.
+    PARALLEL_GROUPS = [
+        {"04_colmap", "05_depth"},
+    ]
+
+    idx = 0
+    while idx < len(steps):
+        step = steps[idx]
         if step not in STAGE_MODULES:
             raise SystemExit(f"Unknown step: {step}")
 
-        module_path = STAGE_MODULES[step]
-        module = importlib.import_module(module_path)
-        if not hasattr(module, "run"):
-            raise NotImplementedError(f"{module_path}.run is not implemented.")
+        # Check if this step starts a parallel group
+        parallel = None
+        for group in PARALLEL_GROUPS:
+            if step in group:
+                remaining = [s for s in steps[idx:] if s in group]
+                if set(remaining) == group:
+                    parallel = remaining
+                    break
 
-        logger.info("--- Running %s (%s) ---", step, module_path)
-        context = module.run(context)
+        if parallel and len(parallel) > 1:
+            logger.info("--- Running parallel: %s ---", parallel)
+            context = _run_parallel(parallel, context)
+            idx += len(parallel)
+        else:
+            module_path = STAGE_MODULES[step]
+            module = importlib.import_module(module_path)
+            if not hasattr(module, "run"):
+                raise NotImplementedError(f"{module_path}.run is not implemented.")
+
+            logger.info("--- Running %s (%s) ---", step, module_path)
+            context = module.run(context)
+            idx += 1
 
     logger.info("Pipeline complete.")
 
