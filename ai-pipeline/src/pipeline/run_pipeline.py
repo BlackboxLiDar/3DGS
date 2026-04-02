@@ -117,6 +117,9 @@ _ARTIFACT_PATHS = {
     "images_3dgs":        "04_colmap/images_3dgs",
     "colmap_model_dir":   "04_colmap/sparse/0",
     "depth_maps":         "05_depth/depth_maps",
+    "depth_vis":          "05_depth/depth_vis",
+    "scaled_depth_maps":  "06_scale/scaled_depth_maps",
+    "scaled_depth_vis":   "06_scale/scaled_depth_vis",
 }
 
 
