@@ -104,6 +104,34 @@ def _setup_logging(out_root: Path) -> None:
     root_logger.addHandler(file_handler)
 
 
+# Known artifact paths relative to out_root.
+# Used to restore context when resuming from a previous run.
+_ARTIFACT_PATHS = {
+    "images_colmap":      "02_ingest/images_colmap",
+    "segmentation_masks": "03_seg/masks",
+    "bbox_sequence":      "03_seg/bbox_sequence.json",
+    "poses":              "04_colmap/poses.npy",
+    "intrinsics":         "04_colmap/intrinsics.json",
+    "sparse_ply":         "04_colmap/sparse.ply",
+    "registered_frames":  "04_colmap/registered_frames.json",
+    "images_3dgs":        "04_colmap/images_3dgs",
+    "colmap_model_dir":   "04_colmap/sparse/0",
+    "depth_maps":         "05_depth/depth_maps",
+}
+
+
+def _restore_artifacts(out_root: Path, context: dict) -> None:
+    """Scan *out_root* for outputs from previous stages and populate context."""
+    restored = []
+    for key, rel_path in _ARTIFACT_PATHS.items():
+        full = out_root / rel_path
+        if full.exists():
+            context["artifacts"][key] = str(full)
+            restored.append(key)
+    if restored:
+        logger.info("Restored %d artifact(s) from %s: %s", len(restored), out_root, restored)
+
+
 def _run_parallel(step_names: list[str], context: dict) -> dict:
     """Execute multiple stages concurrently and merge their artifacts."""
 
@@ -159,6 +187,9 @@ def main() -> None:
         "out_root": str(out_root),
         "artifacts": {},
     }
+
+    # Restore artifacts from previous run (enables resuming from mid-pipeline)
+    _restore_artifacts(out_root, context)
 
     # Add src/ to sys.path once for all stage imports
     src_root = str(Path(__file__).resolve().parents[2] / "src")
