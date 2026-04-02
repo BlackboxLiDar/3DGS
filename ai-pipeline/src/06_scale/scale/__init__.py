@@ -7,6 +7,7 @@ Two-pass algorithm:
 
 import json
 import logging
+import traceback
 from pathlib import Path
 
 import cv2
@@ -40,6 +41,14 @@ def run(context):
     Writes:
         context["artifacts"]["scaled_depth_maps"]  — dir of .npy (metres)
     """
+    try:
+        return _run_impl(context)
+    except Exception:
+        logger.error("Stage 06 failed:\n%s", traceback.format_exc())
+        raise
+
+
+def _run_impl(context):
     # ── paths ──────────────────────────────────────────────────────────
     depth_dir = Path(context["artifacts"]["depth_maps"])
     sparse_ply = Path(context["artifacts"]["sparse_ply"])
@@ -89,11 +98,14 @@ def run(context):
             scale = abs(scale)
 
     # ── Pass 2: ground plane prior ─────────────────────────────────────
+    logger.info("Pass 2: collecting road points for ground plane fitting...")
     fx, fy = intrinsics["fx"], intrinsics["fy"]
     cx, cy = intrinsics["cx"], intrinsics["cy"]
     h, w = intrinsics["height"], intrinsics["width"]
 
     road_vu = road_pixel_coords(h, w)
+    logger.info("  road pixel candidates: %d per frame", len(road_vu))
+
     road_pts_list = []
     step = max(1, len(reg_frames) // 20)  # use ~20 frames
     for i in range(0, len(reg_frames), step):
@@ -111,12 +123,15 @@ def run(context):
     correction = 1.0
     if road_pts_list:
         road_pts = np.concatenate(road_pts_list)
+        logger.info("  total road 3D points: %d", len(road_pts))
         try:
             normal, d = fit_ground_plane(road_pts)
             normal, d = orient_normal_toward_cameras(normal, d, poses)
             correction = compute_ground_correction(poses, normal, d)
         except ScaleAlignmentError as e:
             logger.warning("Ground plane fit failed — skipping Pass 2: %s", e)
+    else:
+        logger.warning("No road points collected — skipping Pass 2.")
 
     # ── Apply to all depth maps ────────────────────────────────────────
     all_npys = sorted(depth_dir.glob("*.npy"))

@@ -163,7 +163,7 @@ def fit_scale_shift(
 # Pass 2 — Ground plane prior
 # ---------------------------------------------------------------------------
 
-def road_pixel_coords(height: int, width: int, bottom_frac: float = 0.25, step: int = 4):
+def road_pixel_coords(height: int, width: int, bottom_frac: float = 0.25, step: int = 8):
     """Return (R, 2) array of (v, u) pixel indices in the bottom region."""
     v_start = int(height * (1 - bottom_frac))
     vs = np.arange(v_start, height, step)
@@ -192,12 +192,14 @@ def backproject_pixels(
 
     pts_cam = np.stack([x_cam, y_cam, z_cam, np.ones_like(z_cam)], axis=1)  # (K, 4)
     pts_world = (c2w @ pts_cam.T).T[:, :3]
-    return pts_world
+    # Filter NaN/Inf
+    finite = np.all(np.isfinite(pts_world), axis=1)
+    return pts_world[finite]
 
 
 def fit_ground_plane(
     points: np.ndarray,
-    ransac_iters: int = 2000,
+    ransac_iters: int = 500,
     inlier_thresh: float = 0.15,
 ) -> tuple[np.ndarray, float]:
     """RANSAC plane fit. Returns (normal, d) where normal · x + d = 0."""
