@@ -73,6 +73,21 @@ def run(context):
 
     scale, shift = fit_scale_shift(rel_depths, colmap_depths)
 
+    # Depth Anything V2 may output inverted depth (closer = higher value).
+    # If scale is negative, invert the depth maps (1 - d) and refit.
+    depth_inverted = False
+    if scale < 0:
+        logger.warning(
+            "Negative scale (%.4f) — depth map convention is inverted. "
+            "Refitting with (1 - depth)...", scale,
+        )
+        depth_inverted = True
+        rel_depths_inv = 1.0 - rel_depths
+        scale, shift = fit_scale_shift(rel_depths_inv, colmap_depths)
+        if scale < 0:
+            logger.error("Scale still negative after inversion (%.4f). Forcing abs.", scale)
+            scale = abs(scale)
+
     # ── Pass 2: ground plane prior ─────────────────────────────────────
     fx, fy = intrinsics["fx"], intrinsics["fy"]
     cx, cy = intrinsics["cx"], intrinsics["cy"]
@@ -87,6 +102,8 @@ def run(context):
         if not npy.exists():
             continue
         rel = np.load(npy)
+        if depth_inverted:
+            rel = 1.0 - rel
         scaled = scale * rel + shift
         pts = backproject_pixels(road_vu, scaled, poses[i], fx, fy, cx, cy)
         road_pts_list.append(pts)
@@ -106,14 +123,16 @@ def run(context):
     vis_dir = workspace / "scaled_depth_vis"
     vis_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Scaling %d depth maps (scale=%.4f shift=%.4f k=%.4f) ...",
-                len(all_npys), scale, shift, correction)
+    logger.info("Scaling %d depth maps (scale=%.4f shift=%.4f k=%.4f inverted=%s) ...",
+                len(all_npys), scale, shift, correction, depth_inverted)
 
     MAX_VIS_DEPTH = 50.0  # metres — colormap ceiling
     all_medians = []
 
     for idx, npy in enumerate(all_npys):
         rel = np.load(npy)
+        if depth_inverted:
+            rel = 1.0 - rel
         absolute = correction * (scale * rel + shift)
         absolute = np.clip(absolute, 0, None).astype(np.float32)
         np.save(scaled_dir / npy.name, absolute)

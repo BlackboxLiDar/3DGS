@@ -152,10 +152,6 @@ def fit_scale_shift(
     coeffs = np.polyfit(rel_depths[mask], colmap_depths[mask], 1)
     scale, shift = float(coeffs[0]), float(coeffs[1])
 
-    if scale <= 0:
-        logger.warning("Negative scale (%.4f) — clamping to 0.01.", scale)
-        scale = 0.01
-
     logger.info(
         "Pass 1 fit: scale=%.4f shift=%.4f  (%d/%d inliers)",
         scale, shift, int(mask.sum()), n,
