@@ -37,12 +37,14 @@ def run(context):
         total_frames, images_dir, device,
     )
 
-    count = estimate_depth_batch(images_dir, depth_dir, device)
+    vis_dir = workspace / "depth_vis"
+    count = estimate_depth_batch(images_dir, depth_dir, device, vis_dir=vis_dir)
 
     context["artifacts"]["depth_maps"] = str(depth_dir)
+    context["artifacts"]["depth_vis"] = str(vis_dir)
 
     logger.info(
-        "Stage 05 complete: %d depth maps -> %s",
-        count, depth_dir,
+        "Stage 05 complete: %d depth maps -> %s, vis -> %s",
+        count, depth_dir, vis_dir,
     )
     return context

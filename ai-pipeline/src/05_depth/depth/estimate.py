@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+import cv2
 import numpy as np
 import torch
 from PIL import Image
@@ -57,17 +58,29 @@ def estimate_depth(
     return depth.cpu().numpy().astype(np.float32)
 
 
+def save_depth_vis(depth: np.ndarray, out_path: Path) -> None:
+    """Save a depth map as a colorised PNG (INFERNO colormap)."""
+    depth_u8 = (depth * 255).clip(0, 255).astype(np.uint8)
+    colored = cv2.applyColorMap(depth_u8, cv2.COLORMAP_INFERNO)
+    cv2.imwrite(str(out_path), colored)
+
+
 def estimate_depth_batch(
     image_dir: Path,
     out_dir: Path,
     device: torch.device,
+    vis_dir: Path | None = None,
 ) -> int:
     """Run depth estimation on all .jpg images in *image_dir*.
 
     Saves each depth map as a .npy file (float32, H x W, 0-1) in *out_dir*.
+    If *vis_dir* is given, also saves colourised .png visualisations.
     Returns the number of processed frames.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
+    if vis_dir is not None:
+        vis_dir.mkdir(parents=True, exist_ok=True)
+
     image_paths = sorted(image_dir.glob("*.jpg"))
     if not image_paths:
         raise FileNotFoundError(f"No .jpg images found in {image_dir}")
@@ -79,6 +92,10 @@ def estimate_depth_batch(
         depth = estimate_depth(img_path, processor, model, device)
         npy_name = img_path.stem + ".npy"
         np.save(out_dir / npy_name, depth)
+
+        if vis_dir is not None:
+            save_depth_vis(depth, vis_dir / (img_path.stem + ".png"))
+
         count += 1
         if (idx + 1) % 50 == 0 or (idx + 1) == len(image_paths):
             logger.info("  depth %d / %d", idx + 1, len(image_paths))
