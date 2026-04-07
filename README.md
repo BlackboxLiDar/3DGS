@@ -116,9 +116,17 @@ docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord
 # 특정 스테이지 실행
 docker compose run pipeline --input /workspace/ai-pipeline/data/sample.tfrecord --steps 02_ingest,03_seg,04_colmap
 
+# 이전 출력을 이어서 특정 스테이지부터 재개
+docker compose run pipeline \
+  --input /workspace/ai-pipeline/data/sample.tfrecord \
+  --steps 06_scale \
+  --out_root /workspace/ai-pipeline/outputs/run_YYYYMMDD_HHMMSS
+
 # GPU 확인
 docker compose run --entrypoint python3 pipeline -c "import torch; print('CUDA:', torch.cuda.is_available())"
 ```
+
+`--out_root`에 기존 출력 디렉토리를 지정하면 이전 스테이지 결과를 그대로 활용하여 이어서 실행할 수 있습니다.
 
 데이터와 출력은 볼륨 마운트(`ai-pipeline/data/`, `ai-pipeline/outputs/`)되어 호스트에 유지됩니다.
 

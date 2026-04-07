@@ -201,11 +201,20 @@ def fit_ground_plane(
     points: np.ndarray,
     ransac_iters: int = 500,
     inlier_thresh: float = 0.15,
+    max_points: int = 50000,
 ) -> tuple[np.ndarray, float]:
     """RANSAC plane fit. Returns (normal, d) where normal · x + d = 0."""
     n = len(points)
     if n < 10:
         raise ScaleAlignmentError(f"Too few road points ({n}) for plane fit.")
+
+    # Subsample for speed
+    if n > max_points:
+        rng_sub = np.random.default_rng(0)
+        idx_sub = rng_sub.choice(n, size=max_points, replace=False)
+        points = points[idx_sub]
+        n = max_points
+        logger.info("  subsampled road points to %d for RANSAC", n)
 
     rng = np.random.default_rng(42)
     best_count = 0
