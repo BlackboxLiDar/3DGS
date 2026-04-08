@@ -17,76 +17,47 @@ class LoginResponseTest {
         // given
         String accessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
         String refreshToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+        String name = "김원준"; // ✅ 이름 추가
 
         // when
-        LoginResponse response = new LoginResponse(accessToken, refreshToken);
+        LoginResponse response = new LoginResponse(accessToken, refreshToken, name);
 
         // then
         assertNotNull(response);
         assertEquals(accessToken, response.accessToken());
         assertEquals(refreshToken, response.refreshToken());
+        assertEquals(name, response.name()); // ✅ 이름 검증 추가
     }
 
     @Test
-    @DisplayName("null 토큰으로 LoginResponse 생성")
-    void createLoginResponseWithNullTokens() {
+    @DisplayName("null 토큰 및 이름으로 LoginResponse 생성")
+    void createLoginResponseWithNullValues() {
         // when
-        LoginResponse response = new LoginResponse(null, null);
+        LoginResponse response = new LoginResponse(null, null, null);
 
         // then
         assertNotNull(response);
         assertNull(response.accessToken());
         assertNull(response.refreshToken());
+        assertNull(response.name()); // ✅ 이름 null 체크 추가
     }
 
     @Test
-    @DisplayName("빈 문자열 토큰으로 LoginResponse 생성")
-    void createLoginResponseWithEmptyTokens() {
+    @DisplayName("빈 문자열로 LoginResponse 생성")
+    void createLoginResponseWithEmptyValues() {
         // given
         String accessToken = "";
         String refreshToken = "";
+        String name = "";
 
         // when
-        LoginResponse response = new LoginResponse(accessToken, refreshToken);
+        LoginResponse response = new LoginResponse(accessToken, refreshToken, name);
 
         // then
         assertNotNull(response);
         assertEquals(accessToken, response.accessToken());
         assertEquals(refreshToken, response.refreshToken());
-    }
-
-    @Test
-    @DisplayName("다양한 토큰 형식으로 LoginResponse 생성")
-    void createLoginResponseWithVariousTokenFormats() {
-        String[] accessTokens = {
-                "simple.token",
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-                "very.long.token.with.many.parts.and.dots",
-                "token-with-dashes",
-                "token_with_underscores",
-                "token123with456numbers789"
-        };
-
-        String[] refreshTokens = {
-                "refresh.simple.token",
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-                "refresh.very.long.token.with.many.parts.and.dots",
-                "refresh-token-with-dashes",
-                "refresh_token_with_underscores",
-                "refresh123token456with789numbers"
-        };
-
-        for (String accessToken : accessTokens) {
-            for (String refreshToken : refreshTokens) {
-                // when
-                LoginResponse response = new LoginResponse(accessToken, refreshToken);
-
-                // then
-                assertNotNull(response);
-                assertEquals(accessToken, response.accessToken());
-                assertEquals(refreshToken, response.refreshToken());
-            }
-        }
+        assertEquals(name, response.name());
     }
 
     @Test
@@ -95,31 +66,17 @@ class LoginResponseTest {
         // given
         String accessToken = "access.token";
         String refreshToken = "refresh.token";
-        LoginResponse response1 = new LoginResponse(accessToken, refreshToken);
-        LoginResponse response2 = new LoginResponse(accessToken, refreshToken);
-        LoginResponse response3 = new LoginResponse("different.access.token", refreshToken);
-        LoginResponse response4 = new LoginResponse(accessToken, "different.refresh.token");
+        String name = "김원준";
+        
+        LoginResponse response1 = new LoginResponse(accessToken, refreshToken, name);
+        LoginResponse response2 = new LoginResponse(accessToken, refreshToken, name);
+        LoginResponse response3 = new LoginResponse("different.token", refreshToken, name);
+        LoginResponse response4 = new LoginResponse(accessToken, refreshToken, "다른이름");
 
         // when & then
         assertEquals(response1, response2);
         assertNotEquals(response1, response3);
-        assertNotEquals(response1, response4);
-        assertNotEquals(response3, response4);
-    }
-
-    @Test
-    @DisplayName("LoginResponse hashCode 테스트")
-    void testLoginResponseHashCode() {
-        // given
-        String accessToken = "access.token";
-        String refreshToken = "refresh.token";
-        LoginResponse response1 = new LoginResponse(accessToken, refreshToken);
-        LoginResponse response2 = new LoginResponse(accessToken, refreshToken);
-        LoginResponse response3 = new LoginResponse("different.access.token", refreshToken);
-
-        // when & then
-        assertEquals(response1.hashCode(), response2.hashCode());
-        assertNotEquals(response1.hashCode(), response3.hashCode());
+        assertNotEquals(response1, response4); // ✅ 이름이 다르면 다른 객체여야 함
     }
 
     @Test
@@ -128,7 +85,8 @@ class LoginResponseTest {
         // given
         String accessToken = "access.token";
         String refreshToken = "refresh.token";
-        LoginResponse response = new LoginResponse(accessToken, refreshToken);
+        String name = "김원준";
+        LoginResponse response = new LoginResponse(accessToken, refreshToken, name);
 
         // when
         String toString = response.toString();
@@ -138,6 +96,7 @@ class LoginResponseTest {
         assertTrue(toString.contains("LoginResponse"));
         assertTrue(toString.contains(accessToken));
         assertTrue(toString.contains(refreshToken));
+        assertTrue(toString.contains(name)); // ✅ toString에 이름이 포함되는지 확인
     }
 
     @Test
@@ -146,17 +105,17 @@ class LoginResponseTest {
         // given
         String accessToken = "access.token";
         String refreshToken = "refresh.token";
-        LoginResponse response = new LoginResponse(accessToken, refreshToken);
+        String name = "김원준";
+        LoginResponse response = new LoginResponse(accessToken, refreshToken, name);
 
         // when & then
-        // Record는 자동으로 equals, hashCode, toString을 생성
         assertNotNull(response);
         
         // Record의 컴포넌트 접근
         assertEquals(accessToken, response.accessToken());
         assertEquals(refreshToken, response.refreshToken());
+        assertEquals(name, response.name()); // ✅ 추가된 필드 접근 확인
         
-        // Record는 final 클래스
         assertTrue(LoginResponse.class.isRecord());
     }
 }

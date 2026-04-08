@@ -57,37 +57,31 @@ public class UserAuthUseCase {
         String refreshToken = tokenProvider.createRefreshToken(user.getUserId());
         refreshTokenService.saveRefreshToken(user.getUserId(), refreshToken, Duration.ofDays(14));
 
-        return new LoginResponse(accessToken, refreshToken);
+        // ✅ 수정된 부분: 이제 사용자의 이름(name)을 응답에 포함합니다.
+        return new LoginResponse(accessToken, refreshToken, user.getName());
     }
 
-    // 🔥 4개 테스트 실패를 잡는 핵심 로직 (순서가 생명입니다!)
     public TokenReissueResponse reissueToken(TokenReissueRequest request) {
         String refreshToken = request.refreshToken();
 
-        // 1. Null 토큰 체크 (테스트: null 토큰으로 재발급 시도 시 예외 발생)
         if (refreshToken == null) {
             throw new RestApiException(AuthErrorStatus.INVALID_REFRESH_TOKEN);
         }
 
-        // 2. 토큰에서 ID 추출 시도 (이게 선행되어야 테스트가 만족함)
         String userId = tokenProvider.getId(refreshToken)
                 .orElseThrow(() -> new RestApiException(AuthErrorStatus.INVALID_REFRESH_TOKEN));
 
-        // 3. 사용자 존재 여부 확인 (테스트: 사용자를 찾을 수 없을 때 예외 발생)
         if (!userRepository.existsByUserId(userId)) {
             throw new RestApiException(AuthErrorStatus.LOGIN_ERROR);
         }
 
-        // 4. 리프레시 토큰 존재 확인 (테스트: 리프레시 토큰이 존재하지 않을 때 예외 발생)
         if (!refreshTokenService.isExist(refreshToken, userId)) {
             throw new RestApiException(AuthErrorStatus.INVALID_REFRESH_TOKEN);
         }
 
-        // 5. 만료 시간 체크 (테스트: 리프레시 토큰 만료 시간을 가져올 수 없을 때)
         Duration duration = tokenProvider.getRemainingDuration(refreshToken)
                 .orElseThrow(() -> new RestApiException(AuthErrorStatus.EXPIRED_MEMBER_JWT));
 
-        // 6. 재발급 진행
         refreshTokenService.deleteRefreshToken(userId);
         String newAccessToken = tokenProvider.createAccessToken(userId);
         String newRefreshToken = tokenProvider.createRefreshToken(userId);
