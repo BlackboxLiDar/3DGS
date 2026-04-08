@@ -19,6 +19,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+//
+import com.youthfi.auth.global.security.JwtAuthenticationFilter;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.util.Arrays;
 
@@ -27,7 +30,8 @@ import java.util.Arrays;
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-
+    //
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final OAuth2FailureHandler oAuth2FailureHandler;
     private final CustomOAuth2UserService customOAuth2UserService;
@@ -53,7 +57,8 @@ public class SecurityConfig {
         // 1. 요청 권한 설정
         http.authorizeHttpRequests(request -> request
                 .requestMatchers(
-                        "/api/v1/auth/**", 
+                        "/api/auth/**",
+                        "/api/v1/auth/**",
                         "/oauth2/**", 
                         "/login/oauth2/**",
                         "/api/v1/reconstruction/**", 
@@ -73,6 +78,10 @@ public class SecurityConfig {
                 .successHandler(oAuth2SuccessHandler)
                 .failureHandler(oAuth2FailureHandler)
         );
+
+        //
+        // JWT 필터 추가
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         // 3. 예외 처리
         http.exceptionHandling(except -> except
@@ -110,3 +119,5 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
+
+
