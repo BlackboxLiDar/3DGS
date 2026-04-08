@@ -75,6 +75,65 @@ def project_points_to_frame(
     return np.stack([u[in_bounds], v[in_bounds]], axis=1), z[in_bounds]
 
 
+def select_ground_sparse_points(
+    points_world: np.ndarray,
+    poses: np.ndarray,
+    registered_frames: list[str],
+    intrinsics: dict,
+    bottom_frac: float = 0.30,
+    min_frame_hits: int = 2,
+) -> np.ndarray:
+    """Select sparse points likely on the ground by projecting to bottom of frames.
+
+    Returns the subset of *points_world* that project into the bottom
+    *bottom_frac* of the image in at least *min_frame_hits* sampled frames.
+    """
+    fx, fy = intrinsics["fx"], intrinsics["fy"]
+    cx, cy = intrinsics["cx"], intrinsics["cy"]
+    w, h = intrinsics["width"], intrinsics["height"]
+    v_thresh = int(h * (1 - bottom_frac))
+
+    N = len(points_world)
+    hit_counts = np.zeros(N, dtype=int)
+
+    step = max(1, len(registered_frames) // 20)
+    n_sampled = 0
+    for i in range(0, len(registered_frames), step):
+        c2w = poses[i]
+        w2c = np.linalg.inv(c2w)
+        hom = np.hstack([points_world, np.ones((N, 1))])
+        p_cam = (w2c @ hom.T).T
+
+        z = p_cam[:, 2]
+        valid = z > 0.01
+
+        u = np.full(N, -1, dtype=int)
+        v = np.full(N, -1, dtype=int)
+        u[valid] = (fx * p_cam[valid, 0] / z[valid] + cx).astype(int)
+        v[valid] = (fy * p_cam[valid, 1] / z[valid] + cy).astype(int)
+
+        in_bottom = valid & (u >= 0) & (u < w) & (v >= v_thresh) & (v < h)
+        hit_counts[in_bottom] += 1
+        n_sampled += 1
+
+    mask = hit_counts >= min(min_frame_hits, n_sampled)
+    ground_pts = points_world[mask]
+
+    if len(ground_pts) < 10:
+        logger.warning(
+            "Only %d ground candidates from sparse points (need ≥10). "
+            "Falling back to full sparse cloud.", len(ground_pts),
+        )
+        return points_world
+
+    logger.info(
+        "Selected %d / %d sparse points as ground candidates "
+        "(bottom_frac=%.0f%%, min_hits=%d, sampled %d frames)",
+        len(ground_pts), N, bottom_frac * 100, min_frame_hits, n_sampled,
+    )
+    return ground_pts
+
+
 # ---------------------------------------------------------------------------
 # Pass 1 — Collect depth pairs & fit scale/shift
 # ---------------------------------------------------------------------------
@@ -286,12 +345,23 @@ def compute_ground_correction(
     cam_centers = poses[:, :3, 3]  # (M, 3)
     dists = np.abs(cam_centers @ plane_normal + plane_d)
     measured = float(np.median(dists))
-    if measured < 0.01:
-        logger.error("Measured camera height ≈ 0 — skipping correction.")
+
+    # Threshold relative to scene scale (camera spread), not absolute metres.
+    scene_scale = float(np.median(np.linalg.norm(
+        cam_centers - cam_centers.mean(axis=0), axis=1,
+    )))
+    if measured < 1e-4 * max(scene_scale, 1e-12):
+        logger.error(
+            "Measured camera height ≈ 0 (%.6f, scene_scale=%.6f) — skipping correction.",
+            measured, scene_scale,
+        )
         return 1.0
+
     k = target_height / measured
+    if k < 0.1 or k > 500:
+        logger.warning("Correction k=%.2f outside expected range [0.1, 500].", k)
     logger.info(
-        "Pass 2: measured_height=%.3f m, target=%.1f m, correction k=%.4f",
+        "Pass 2: measured_height=%.6f (COLMAP units), target=%.2f m, correction k=%.4f",
         measured, target_height, k,
     )
     return k

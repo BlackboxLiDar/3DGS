@@ -17,14 +17,13 @@ from .align import (
     CAMERA_HEIGHT_PRIOR,
     DEFAULT_CAMERA_HEIGHT,
     ScaleAlignmentError,
-    backproject_pixels,
     collect_depth_pairs,
     compute_ground_correction,
     fit_ground_plane,
     fit_scale_shift,
     load_sparse_points,
     orient_normal_toward_cameras,
-    road_pixel_coords,
+    select_ground_sparse_points,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,43 +99,21 @@ def _run_impl(context):
             scale = abs(scale)
 
     # ── Pass 2: ground plane prior ─────────────────────────────────────
-    logger.info("Pass 2: collecting road points for ground plane fitting...")
-    fx, fy = intrinsics["fx"], intrinsics["fy"]
-    cx, cy = intrinsics["cx"], intrinsics["cy"]
-    h, w = intrinsics["height"], intrinsics["width"]
-
-    road_vu = road_pixel_coords(h, w)
-    logger.info("  road pixel candidates: %d per frame", len(road_vu))
-
-    road_pts_list = []
-    step = max(1, len(reg_frames) // 20)  # use ~20 frames
-    for i in range(0, len(reg_frames), step):
-        stem = Path(reg_frames[i]).stem
-        npy = depth_dir / f"{stem}.npy"
-        if not npy.exists():
-            continue
-        rel = np.load(npy)
-        if depth_inverted:
-            rel = 1.0 - rel
-        scaled = scale * rel + shift
-        pts = backproject_pixels(road_vu, scaled, poses[i], fx, fy, cx, cy)
-        road_pts_list.append(pts)
+    logger.info("Pass 2: fitting ground plane from COLMAP sparse points...")
 
     correction = 1.0
-    if road_pts_list:
-        road_pts = np.concatenate(road_pts_list)
-        logger.info("  total road 3D points: %d", len(road_pts))
-        try:
-            normal, d = fit_ground_plane(road_pts)
-            normal, d = orient_normal_toward_cameras(normal, d, poses)
-            input_type = context.get("input_type", "video")
-            target_height = CAMERA_HEIGHT_PRIOR.get(input_type, DEFAULT_CAMERA_HEIGHT)
-            logger.info("  using camera height prior: %.2f m (input_type=%s)", target_height, input_type)
-            correction = compute_ground_correction(poses, normal, d, target_height=target_height)
-        except ScaleAlignmentError as e:
-            logger.warning("Ground plane fit failed — skipping Pass 2: %s", e)
-    else:
-        logger.warning("No road points collected — skipping Pass 2.")
+    try:
+        ground_pts = select_ground_sparse_points(
+            points_world, poses, reg_frames, intrinsics,
+        )
+        normal, d = fit_ground_plane(ground_pts)
+        normal, d = orient_normal_toward_cameras(normal, d, poses)
+        input_type = context.get("input_type", "video")
+        target_height = CAMERA_HEIGHT_PRIOR.get(input_type, DEFAULT_CAMERA_HEIGHT)
+        logger.info("  using camera height prior: %.2f m (input_type=%s)", target_height, input_type)
+        correction = compute_ground_correction(poses, normal, d, target_height=target_height)
+    except ScaleAlignmentError as e:
+        logger.warning("Ground plane fit failed — skipping Pass 2: %s", e)
 
     # ── Apply to all depth maps ────────────────────────────────────────
     all_npys = sorted(depth_dir.glob("*.npy"))
