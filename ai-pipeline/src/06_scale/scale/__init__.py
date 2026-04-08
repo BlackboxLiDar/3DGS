@@ -14,6 +14,8 @@ import cv2
 import numpy as np
 
 from .align import (
+    CAMERA_HEIGHT_PRIOR,
+    DEFAULT_CAMERA_HEIGHT,
     ScaleAlignmentError,
     backproject_pixels,
     collect_depth_pairs,
@@ -127,7 +129,10 @@ def _run_impl(context):
         try:
             normal, d = fit_ground_plane(road_pts)
             normal, d = orient_normal_toward_cameras(normal, d, poses)
-            correction = compute_ground_correction(poses, normal, d)
+            input_type = context.get("input_type", "video")
+            target_height = CAMERA_HEIGHT_PRIOR.get(input_type, DEFAULT_CAMERA_HEIGHT)
+            logger.info("  using camera height prior: %.2f m (input_type=%s)", target_height, input_type)
+            correction = compute_ground_correction(poses, normal, d, target_height=target_height)
         except ScaleAlignmentError as e:
             logger.warning("Ground plane fit failed — skipping Pass 2: %s", e)
     else:

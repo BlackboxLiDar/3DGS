@@ -12,7 +12,11 @@ import open3d as o3d
 
 logger = logging.getLogger(__name__)
 
-CAMERA_HEIGHT_PRIOR = 1.5  # metres
+CAMERA_HEIGHT_PRIOR = {
+    "video": 1.5,   # typical dashcam
+    "waymo": 2.05,  # Waymo top-mounted camera
+}
+DEFAULT_CAMERA_HEIGHT = 1.5
 
 
 class ScaleAlignmentError(Exception):
@@ -200,10 +204,16 @@ def backproject_pixels(
 def fit_ground_plane(
     points: np.ndarray,
     ransac_iters: int = 500,
-    inlier_thresh: float = 0.15,
+    inlier_thresh: float | None = None,
+    mad_multiplier: float = 3.0,
     max_points: int = 50000,
 ) -> tuple[np.ndarray, float]:
-    """RANSAC plane fit. Returns (normal, d) where normal · x + d = 0."""
+    """RANSAC plane fit. Returns (normal, d) where normal · x + d = 0.
+
+    When *inlier_thresh* is None (default), an adaptive threshold is computed
+    per iteration using MAD (Median Absolute Deviation) of point-to-plane
+    distances, scaled by *mad_multiplier*.
+    """
     n = len(points)
     if n < 10:
         raise ScaleAlignmentError(f"Too few road points ({n}) for plane fit.")
@@ -231,7 +241,13 @@ def fit_ground_plane(
         normal /= norm
         d = -normal @ p0
         dists = np.abs(points @ normal + d)
-        count = int(np.sum(dists < inlier_thresh))
+        if inlier_thresh is not None:
+            thresh = inlier_thresh
+        else:
+            median_dist = np.median(dists)
+            mad = np.median(np.abs(dists - median_dist))
+            thresh = mad_multiplier * mad if mad > 1e-12 else median_dist * 0.1
+        count = int(np.sum(dists < thresh))
         if count > best_count:
             best_count = count
             best_normal = normal
@@ -239,7 +255,13 @@ def fit_ground_plane(
 
     # SVD refit on inliers
     dists = np.abs(points @ best_normal + best_d)
-    inlier_mask = dists < inlier_thresh
+    if inlier_thresh is not None:
+        refit_thresh = inlier_thresh
+    else:
+        median_dist = np.median(dists)
+        mad = np.median(np.abs(dists - median_dist))
+        refit_thresh = mad_multiplier * mad if mad > 1e-12 else median_dist * 0.1
+    inlier_mask = dists < refit_thresh
     inlier_pts = points[inlier_mask]
     if len(inlier_pts) >= 3:
         centroid = inlier_pts.mean(axis=0)
@@ -248,8 +270,8 @@ def fit_ground_plane(
         best_d = -best_normal @ centroid
 
     logger.info(
-        "Ground plane: normal=[%.3f,%.3f,%.3f] d=%.3f  (%d/%d inliers)",
-        *best_normal, best_d, best_count, n,
+        "Ground plane: normal=[%.3f,%.3f,%.3f] d=%.3f  (%d/%d inliers, thresh=%.6f)",
+        *best_normal, best_d, int(inlier_mask.sum()), n, refit_thresh,
     )
     return best_normal, best_d
 
@@ -258,7 +280,7 @@ def compute_ground_correction(
     poses: np.ndarray,
     plane_normal: np.ndarray,
     plane_d: float,
-    target_height: float = CAMERA_HEIGHT_PRIOR,
+    target_height: float = DEFAULT_CAMERA_HEIGHT,
 ) -> float:
     """Return multiplicative correction k = target_height / measured_height."""
     cam_centers = poses[:, :3, 3]  # (M, 3)
