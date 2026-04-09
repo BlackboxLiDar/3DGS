@@ -85,6 +85,86 @@ def _convert_cameras_bin_to_pinhole(src: Path, dst: Path):
                 f.write(struct.pack("<d", p))
 
 
+def _filter_images_txt(src: Path, dst: Path, keep_names: set[str]):
+    """Rewrite images.txt keeping only frames in keep_names.
+
+    COLMAP images.txt format: pairs of lines per image.
+      Line 1: IMAGE_ID QW QX QY QZ TX TY TZ CAMERA_ID NAME
+      Line 2: POINTS2D[] as (X Y POINT3D_ID) ...
+    """
+    lines_out = []
+    kept = 0
+    with open(src) as f:
+        lines = f.readlines()
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("#") or not line.strip():
+            lines_out.append(line)
+            i += 1
+            continue
+        # Image header line — check NAME (last field)
+        parts = line.strip().split()
+        name = parts[-1] if len(parts) >= 10 else ""
+        if name in keep_names:
+            lines_out.append(line)
+            if i + 1 < len(lines):
+                lines_out.append(lines[i + 1])  # points2D line
+            kept += 1
+        i += 2  # skip both lines (header + points2D)
+
+    with open(dst, "w") as f:
+        f.writelines(lines_out)
+    logger.info("  images.txt: %d/%d frames kept (filtered to images_3dgs)",
+                kept, kept + (len(lines) - len(lines_out)) // 2)
+
+
+def _filter_images_bin(src: Path, dst: Path, keep_names: set[str]):
+    """Rewrite images.bin keeping only frames in keep_names.
+
+    COLMAP images.bin format per image:
+      image_id (4B uint32) + qvec (32B, 4×double) + tvec (24B, 3×double)
+      + camera_id (4B uint32) + name (null-terminated string)
+      + num_points2D (8B uint64) + points2D (num × 24B: x,y,point3d_id)
+    """
+    kept_entries = []
+    with open(src, "rb") as f:
+        num_images = struct.unpack("<Q", f.read(8))[0]
+        for _ in range(num_images):
+            image_id = struct.unpack("<I", f.read(4))[0]
+            qvec = f.read(32)   # 4 doubles
+            tvec = f.read(24)   # 3 doubles
+            camera_id = struct.unpack("<I", f.read(4))[0]
+            # Read null-terminated name
+            name_bytes = b""
+            while True:
+                ch = f.read(1)
+                if ch == b"\x00":
+                    break
+                name_bytes += ch
+            name = name_bytes.decode("utf-8")
+            num_points2D = struct.unpack("<Q", f.read(8))[0]
+            points2D_data = f.read(num_points2D * 24)  # each: x(8B) + y(8B) + id(8B)
+
+            if name in keep_names:
+                kept_entries.append((image_id, qvec, tvec, camera_id,
+                                    name_bytes, num_points2D, points2D_data))
+
+    with open(dst, "wb") as f:
+        f.write(struct.pack("<Q", len(kept_entries)))
+        for image_id, qvec, tvec, camera_id, name_bytes, num_pts, pts_data in kept_entries:
+            f.write(struct.pack("<I", image_id))
+            f.write(qvec)
+            f.write(tvec)
+            f.write(struct.pack("<I", camera_id))
+            f.write(name_bytes + b"\x00")
+            f.write(struct.pack("<Q", num_pts))
+            f.write(pts_data)
+
+    logger.info("  images.bin: %d/%d frames kept", len(kept_entries), num_images)
+
+
 def prepare_scene_dir(
     scene_dir: Path,
     images_dir: Path,
@@ -97,14 +177,18 @@ def prepare_scene_dir(
     Layout::
 
         scene_dir/
-        ├── images/          → symlink to images_dir
+        ├── images/          → symlink to images_dir (3DGS subset)
         ├── masks/           → symlink to masks_dir
         └── sparse/0/
             ├── cameras.bin  (PINHOLE, converted from OPENCV if needed)
-            ├── images.bin   (from COLMAP)
+            ├── images.bin   (filtered to match images_dir)
             └── points3D.ply (our filtered dense PC)
     """
     scene_dir.mkdir(parents=True, exist_ok=True)
+
+    # Collect filenames present in images_dir (the 3DGS subset)
+    keep_names = {p.name for p in images_dir.iterdir() if p.suffix in (".jpg", ".png")}
+    logger.info("  images_3dgs contains %d frames", len(keep_names))
 
     # Symlink images
     img_link = scene_dir / "images"
@@ -133,12 +217,14 @@ def prepare_scene_dir(
         if src.exists():
             converter(src, sparse_dir / name)
 
-    # images: copy as-is
-    for name in ["images.bin", "images.txt"]:
+    # images: filter to only include frames present in images_3dgs
+    for name, filterer in [
+        ("images.txt", _filter_images_txt),
+        ("images.bin", _filter_images_bin),
+    ]:
         src = colmap_model_dir / name
         if src.exists():
-            shutil.copy2(src, sparse_dir / name)
-            logger.info("  copied %s", name)
+            filterer(src, sparse_dir / name, keep_names)
 
     # Use our filtered dense PC as the initial point cloud
     dst_ply = sparse_dir / "points3D.ply"
