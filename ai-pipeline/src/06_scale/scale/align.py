@@ -80,8 +80,8 @@ def select_ground_sparse_points(
     poses: np.ndarray,
     registered_frames: list[str],
     intrinsics: dict,
-    bottom_frac: float = 0.30,
-    min_frame_hits: int = 2,
+    bottom_frac: float = 0.40,
+    min_frame_hits: int = 1,
 ) -> np.ndarray:
     """Select sparse points likely on the ground by projecting to bottom of frames.
 
@@ -262,20 +262,30 @@ def backproject_pixels(
 
 def fit_ground_plane(
     points: np.ndarray,
-    ransac_iters: int = 500,
+    ransac_iters: int = 1000,
     inlier_thresh: float | None = None,
-    mad_multiplier: float = 3.0,
     max_points: int = 50000,
 ) -> tuple[np.ndarray, float]:
     """RANSAC plane fit. Returns (normal, d) where normal · x + d = 0.
 
-    When *inlier_thresh* is None (default), an adaptive threshold is computed
-    per iteration using MAD (Median Absolute Deviation) of point-to-plane
-    distances, scaled by *mad_multiplier*.
+    When *inlier_thresh* is None (default), a threshold is computed as 1% of the
+    scene extent (90th-percentile diameter).  This scales with COLMAP's arbitrary
+    coordinate system and is tight enough to separate ground from non-ground.
     """
     n = len(points)
     if n < 10:
         raise ScaleAlignmentError(f"Too few road points ({n}) for plane fit.")
+
+    # Compute scene-extent-based threshold when not explicitly given.
+    if inlier_thresh is None:
+        centroid = np.median(points, axis=0)
+        dists_to_centroid = np.linalg.norm(points - centroid, axis=1)
+        scene_extent = float(np.percentile(dists_to_centroid, 90)) * 2
+        inlier_thresh = 0.01 * scene_extent
+        logger.info(
+            "  ground plane RANSAC: scene_extent=%.4f, inlier_thresh=%.6f",
+            scene_extent, inlier_thresh,
+        )
 
     # Subsample for speed
     if n > max_points:
@@ -300,13 +310,7 @@ def fit_ground_plane(
         normal /= norm
         d = -normal @ p0
         dists = np.abs(points @ normal + d)
-        if inlier_thresh is not None:
-            thresh = inlier_thresh
-        else:
-            median_dist = np.median(dists)
-            mad = np.median(np.abs(dists - median_dist))
-            thresh = mad_multiplier * mad if mad > 1e-12 else median_dist * 0.1
-        count = int(np.sum(dists < thresh))
+        count = int(np.sum(dists < inlier_thresh))
         if count > best_count:
             best_count = count
             best_normal = normal
@@ -314,13 +318,7 @@ def fit_ground_plane(
 
     # SVD refit on inliers
     dists = np.abs(points @ best_normal + best_d)
-    if inlier_thresh is not None:
-        refit_thresh = inlier_thresh
-    else:
-        median_dist = np.median(dists)
-        mad = np.median(np.abs(dists - median_dist))
-        refit_thresh = mad_multiplier * mad if mad > 1e-12 else median_dist * 0.1
-    inlier_mask = dists < refit_thresh
+    inlier_mask = dists < inlier_thresh
     inlier_pts = points[inlier_mask]
     if len(inlier_pts) >= 3:
         centroid = inlier_pts.mean(axis=0)
@@ -330,7 +328,7 @@ def fit_ground_plane(
 
     logger.info(
         "Ground plane: normal=[%.3f,%.3f,%.3f] d=%.3f  (%d/%d inliers, thresh=%.6f)",
-        *best_normal, best_d, int(inlier_mask.sum()), n, refit_thresh,
+        *best_normal, best_d, int(inlier_mask.sum()), n, inlier_thresh,
     )
     return best_normal, best_d
 
