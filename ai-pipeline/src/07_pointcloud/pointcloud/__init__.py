@@ -124,7 +124,7 @@ def _run_impl(context):
         pcd.colors = o3d.utility.Vector3dVector(colors_arr.astype(np.float64) / 255.0)
 
     # ── voxel downsampling ─────────────────────────────────────────────
-    VOXEL_SIZE = 0.05  # metres — spatially uniform downsampling
+    VOXEL_SIZE = 0.1  # metres — spatially uniform downsampling
     logger.info("Voxel downsampling: voxel_size=%.3f m  (%d points before)", VOXEL_SIZE, total_pts)
     pcd = pcd.voxel_down_sample(voxel_size=VOXEL_SIZE)
     final_pts = len(pcd.points)

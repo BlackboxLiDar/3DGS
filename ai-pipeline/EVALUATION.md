@@ -178,18 +178,18 @@ Output: 07_pointcloud/dense.ply
 | pixel step | 2 | every other pixel |
 | min_depth | 0.5 m | 카메라 근접 노이즈 제거 |
 | max_depth | 150.0 m | 하늘/무한 제거 |
-| voxel_size | 0.05 m (5cm) | 3D 공간 균일 다운샘플링 |
+| voxel_size | 0.1 m (10cm) | 3D 공간 균일 다운샘플링 |
 | 색상 | RGB (원본 이미지에서 추출) | colored PLY |
 
 ### 설계 결정
 - **Voxel downsampling 적용 이유:** Raw 122M points (3.1GB)는 Stage 08 (Open3D outlier removal)과 Stage 10 (3DGS 학습)에서 메모리/시간 초과 유발. 일반적인 3DGS 초기화는 1-5M points 권장.
-- **voxel_size=0.05m:** 5cm 해상도로 도로/건물 구조 보존하면서 포인트 수 대폭 감소 예상 (1-5M 목표)
+- **voxel_size=0.1m:** 10cm 해상도로 도로/건물 구조 보존하면서 3DGS 학습에 적합한 3-10M 포인트 목표
 - **step=2 + voxel 조합:** step으로 1차 감소 후, voxel로 3D 공간 균일성 보장
 
 ### 이슈 및 권장사항
 | # | 심각도 | 이슈 | 비고 |
 |---|--------|------|------|
-| 1 | Low | voxel_size 튜닝 필요 가능 | 0.05m이 너무 크면 0.02m, 작으면 0.1m으로 조정 |
+| 1 | Low | voxel_size 튜닝 필요 가능 | 0.1m 기본, 디테일 필요시 0.05m, 더 축소 필요시 0.15m |
 | 2 | Low | 동적 객체(차량 등) 포함됨 | Stage 10에서 mask loss 제외로 처리 예정 |
 
 ---
