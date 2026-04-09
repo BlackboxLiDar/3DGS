@@ -58,6 +58,8 @@ def _run_impl(context):
         filtered_ply=filtered_ply,
     )
 
+    model_dir.mkdir(parents=True, exist_ok=True)
+
     # ── 2. Run 3DGS training ──────────────────────────────────────────
     ITERATIONS = 30_000
     SAVE_ITERATIONS = [7_000, 30_000]
