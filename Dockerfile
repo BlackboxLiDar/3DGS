@@ -40,6 +40,9 @@ RUN pip3 install --no-cache-dir "numpy>=1.24,<2" && \
     pip3 install --no-cache-dir --no-build-isolation waymo-open-dataset-tf-2-12-0
 
 # 3D Gaussian Splatting + CUDA extensions
+# Set CUDA arch explicitly — Docker build has no GPU, so auto-detect fails.
+# 86=Ampere(A100/3090), 89=Ada(4090/L40S). Adjust if your GPU differs.
+ENV TORCH_CUDA_ARCH_LIST="8.6;8.9"
 RUN git clone --recursive https://github.com/graphdeco-inria/gaussian-splatting.git \
         /workspace/third_party/gaussian-splatting && \
     cd /workspace/third_party/gaussian-splatting && \
