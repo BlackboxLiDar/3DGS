@@ -123,8 +123,16 @@ def _run_impl(context):
         colors_arr = np.concatenate(all_colors)
         pcd.colors = o3d.utility.Vector3dVector(colors_arr.astype(np.float64) / 255.0)
 
+    # ── voxel downsampling ─────────────────────────────────────────────
+    VOXEL_SIZE = 0.05  # metres — spatially uniform downsampling
+    logger.info("Voxel downsampling: voxel_size=%.3f m  (%d points before)", VOXEL_SIZE, total_pts)
+    pcd = pcd.voxel_down_sample(voxel_size=VOXEL_SIZE)
+    final_pts = len(pcd.points)
+    logger.info("After downsampling: %d points (%.1f%% of original)",
+                final_pts, final_pts / total_pts * 100)
+
     o3d.io.write_point_cloud(str(ply_path), pcd)
-    logger.info("Stage 07 complete: %d points -> %s", total_pts, ply_path)
+    logger.info("Stage 07 complete: %d points -> %s", final_pts, ply_path)
 
     # ── artifacts ──────────────────────────────────────────────────────
     context["artifacts"]["dense_pointcloud"] = str(ply_path)
