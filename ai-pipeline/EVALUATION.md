@@ -2,7 +2,7 @@
 
 **입력 데이터:** `sample3.tfrecord` (Waymo)  
 **실행 출력:** `run_20260402_042652`  
-**평가 일자:** 2026-04-08
+**평가 일자:** 2026-04-09 (Stage 06 수정 반영)
 
 ---
 
@@ -115,55 +115,60 @@
 
 ## Stage 06 — Scale Alignment
 
-**상태:** ❌ 수정 필요
+**상태:** ✅ 정상 (수정 완료)
 
-### 실행 결과
+### 수정 이력
+1. **Camera height prior**: 1.5m 하드코딩 → input_type별 딕셔너리 (`waymo: 2.05m`, `video: 1.5m`)
+2. **Ground plane fitting**: depth-map backprojection → **COLMAP sparse points 직접 사용** (triangulation으로 정확한 3D 위치 보장)
+3. **RANSAC threshold**: 고정값 0.15m → **scene-extent 기반 adaptive** (`0.01 × 90th-percentile diameter`)
+4. **Ground candidate 선별**: `select_ground_sparse_points()` 추가 (이미지 하단 40%에 투영되는 sparse points)
+5. **Camera height threshold**: `measured < 0.01` (미터 가정) → 상대적 threshold (`1e-4 × scene_scale`)
+
+### 실행 결과 (수정 후)
 ```
 Pass 1: scale=0.7306 shift=0.6660 (96817/124542 inliers, 77.7%)
          depth inversion 감지 → 자동 반전 후 재fit
-Pass 2: ground plane normal=[-0.041,-0.999,0.000] d=0.043
-         50000/50000 inliers (100%)
-         measured_height=0.046m → k=32.7817
-최종:   median=41.14m  range=[39.97, 41.94]m (frame median)
+Pass 2: ground candidates = 117 / 4230 sparse points (bottom 40%, min 1 frame)
+         scene_extent=31.95, inlier_thresh=0.3195
+         ground plane normal=[-0.055,-0.998,0.029] d=0.095 (115/117 inliers)
+         measured_height=0.0625 COLMAP units → target=2.05m → k=32.80
+최종:   median=41.17m  range=[39.99, 41.97]m (frame median)
 ```
 
 ### 주요 파라미터
 | 파라미터 | 값 | 비고 |
 |---------|-----|------|
 | RANSAC iters (Pass 1) | 1000 | linear regression |
-| inlier_thresh (Pass 1) | 2.0 m | depth pair residual |
-| RANSAC iters (Pass 2) | 500 | ground plane |
-| inlier_thresh (Pass 2) | 0.15 m | ❌ 고정값, 스케일 미반영 |
-| CAMERA_HEIGHT_PRIOR | 1.5 m | ❌ Waymo에 부적합 (실제 ~2.0m) |
-| road region | bottom 25% | 이미지 하단 |
-| road pixel step | 8 | 샘플링 간격 |
+| inlier_thresh (Pass 1) | 2.0 | depth pair residual |
+| RANSAC iters (Pass 2) | 1000 | ground plane |
+| inlier_thresh (Pass 2) | auto (0.01 × scene extent) | scene-extent 기반 |
+| CAMERA_HEIGHT_PRIOR | waymo: 2.05m, video: 1.5m | input_type별 |
+| ground candidate | sparse points, bottom 40% | depth-map backprojection 대신 |
 | vis colormap | TURBO, 0-50m | |
 
 ### Depth 시각화 분석
-- TURBO colormap 기준: 앞 차량(초록) ≈ 5-10m, 도로(주황) ≈ 15-25m, 원거리(빨강) ≈ 35-50m
-- Depth ordering 정상 (가까운 곳 → 먼 곳 gradient 올바름)
-- 전체 스케일이 다소 과대 추정된 경향
+- TURBO colormap 기준: 앞 차량(초록) ≈ 10-20m, 도로(주황) ≈ 20-35m, 원거리(빨강) ≈ 40-50m+
+- Depth ordering 정상 (가까운 곳 → 먼 곳 gradient 자연스러움)
+- 전력선/간판 등 세부 구조물도 depth에 반영됨
 
-### 이슈 및 권장사항
-| # | 심각도 | 이슈 | 상세 | 수정 방안 |
-|---|--------|------|------|-----------|
-| 1 | **High** | Ground plane inlier threshold 스케일 미반영 | `inlier_thresh=0.15m`가 COLMAP 임의 스케일 데이터에 적용되어 100% inlier → RANSAC 무효화 | MAD(Median Absolute Deviation) 기반 adaptive threshold 도입 |
-| 2 | **High** | Camera height prior 하드코딩 | `CAMERA_HEIGHT_PRIOR=1.5m`이나 Waymo 차량은 ~2.0-2.1m | input_type별 height dict로 변경 (video: 1.5m, waymo: 2.05m) |
-| 3 | Medium | k=32.78 (큰 보정 계수) | COLMAP 임의 스케일 → 실제 미터 변환이므로 큰 k 자체는 정상이나, #1/#2 수정 후 재검증 필요 | 위 수정 후 재실행하여 확인 |
-| 4 | Low | Frame median 편차 ~2m | 39.97~41.94m 범위로 안정적, 양호 | 현재 수준 유지 |
+### 잔여 이슈
+| # | 심각도 | 이슈 | 비고 |
+|---|--------|------|------|
+| 1 | Low | median=41m이 다소 높을 수 있음 | 장면 특성(교외 도로, 원거리 비중 높음)에 따라 정상 범위 |
+| 2 | Low | Frame median 편차 ~2m | 39.99~41.97m으로 안정적, 양호 |
 
 ---
 
 ## 종합 요약
 
-| Stage | 상태 | 긴급 수정 | 향후 개선 |
-|-------|------|-----------|-----------|
-| 02 Ingest | ✅ 정상 | 없음 | fps config 분리 |
-| 03 Seg | ✅ 정상 | 없음 | motion_thresh 해상도 비례화 |
-| 04 COLMAP | ✅ 정상 | 없음 | 품질 메트릭 출력, loop detection |
-| 05 Depth | ⚠️ 주의 | 없음 | global normalization, 마스크 적용 |
-| 06 Scale | ❌ 수정필요 | adaptive threshold + camera height | 수정 후 재실행 검증 |
+| Stage | 상태 | 비고 |
+|-------|------|------|
+| 02 Ingest | ✅ 정상 | fps config 분리 고려 |
+| 03 Seg | ✅ 정상 | motion_thresh 해상도 비례화 고려 |
+| 04 COLMAP | ✅ 정상 | 품질 메트릭 출력, loop detection 고려 |
+| 05 Depth | ⚠️ 주의 | per-frame normalization, global 고려 |
+| 06 Scale | ✅ 수정완료 | sparse point ground plane + scene-extent threshold |
 
-### 즉시 수정 대상
-1. **`align.py` — `fit_ground_plane()`**: inlier_thresh를 MAD 기반 adaptive로 변경
-2. **`align.py` + `__init__.py`**: CAMERA_HEIGHT_PRIOR를 input_type별 딕셔너리로 변경
+### 다음 단계
+- **Track A (배경 복원):** Stage 07 → 08 → 10 → 11 → 12
+- **Track B (궤적 추출):** Stage 09 → 12

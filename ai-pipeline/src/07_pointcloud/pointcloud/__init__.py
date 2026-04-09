@@ -1,3 +1,131 @@
+"""Stage 07: Dense Point Cloud — backproject metric depth maps to 3D.
+
+Reads absolute-scale depth maps (metres) from Stage 06, original images for
+RGB colour, and camera poses/intrinsics from Stage 04 to produce a coloured
+dense point cloud saved as PLY.
+"""
+
+import json
+import logging
+import traceback
+from pathlib import Path
+
+import cv2
+import numpy as np
+import open3d as o3d
+
+from .backproject import backproject_frame
+
+logger = logging.getLogger(__name__)
+
+
 def run(context):
-    """Stage entrypoint. Implement later."""
-    raise NotImplementedError("Stage not implemented yet.")
+    """Stage 07 entry point.
+
+    Reads:
+        context["artifacts"]["scaled_depth_maps"]  — dir of .npy (metres)
+        context["artifacts"]["poses"]              — poses.npy (M, 4, 4) c2w
+        context["artifacts"]["intrinsics"]         — intrinsics.json
+        context["artifacts"]["registered_frames"]  — registered_frames.json
+        context["artifacts"]["images_colmap"]      — dir of original .jpg
+
+    Writes:
+        context["artifacts"]["dense_pointcloud"]   — dense.ply (XYZ + RGB)
+    """
+    try:
+        return _run_impl(context)
+    except Exception:
+        logger.error("Stage 07 failed:\n%s", traceback.format_exc())
+        raise
+
+
+def _run_impl(context):
+    # ── paths ──────────────────────────────────────────────────────────
+    depth_dir = Path(context["artifacts"]["scaled_depth_maps"])
+    poses_path = Path(context["artifacts"]["poses"])
+    intrinsics_path = Path(context["artifacts"]["intrinsics"])
+    reg_path = Path(context["artifacts"]["registered_frames"])
+    images_dir = Path(context["artifacts"]["images_colmap"])
+
+    out_root = Path(context["out_root"])
+    workspace = out_root / "07_pointcloud"
+    workspace.mkdir(parents=True, exist_ok=True)
+    ply_path = workspace / "dense.ply"
+
+    # ── load metadata ──────────────────────────────────────────────────
+    poses = np.load(poses_path)  # (M, 4, 4)
+    with open(intrinsics_path) as f:
+        intrinsics = json.load(f)
+    with open(reg_path) as f:
+        reg_frames = json.load(f)["frames"]
+
+    fx, fy = intrinsics["fx"], intrinsics["fy"]
+    cx, cy = intrinsics["cx"], intrinsics["cy"]
+
+    logger.info(
+        "Stage 07 starting: %d registered frames, depth from %s",
+        len(reg_frames), depth_dir,
+    )
+
+    # ── backproject each frame ─────────────────────────────────────────
+    STEP = 2          # pixel subsampling stride
+    MIN_DEPTH = 0.5   # metres
+    MAX_DEPTH = 150.0  # metres
+
+    all_points = []
+    all_colors = []
+    total_pts = 0
+
+    for idx, fname in enumerate(reg_frames):
+        stem = Path(fname).stem
+        npy_path = depth_dir / f"{stem}.npy"
+        if not npy_path.exists():
+            continue
+
+        depth_map = np.load(npy_path)
+
+        # Load original image for RGB
+        img_path = images_dir / fname
+        image = None
+        if img_path.exists():
+            bgr = cv2.imread(str(img_path))
+            if bgr is not None:
+                image = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+        pts, colors = backproject_frame(
+            depth_map, poses[idx],
+            fx, fy, cx, cy,
+            image=image, step=STEP,
+            min_depth=MIN_DEPTH, max_depth=MAX_DEPTH,
+        )
+
+        if len(pts) > 0:
+            all_points.append(pts)
+            if colors is not None:
+                all_colors.append(colors)
+            total_pts += len(pts)
+
+        if (idx + 1) % 50 == 0 or (idx + 1) == len(reg_frames):
+            logger.info("  backprojected %d / %d frames  (%d points so far)",
+                        idx + 1, len(reg_frames), total_pts)
+
+    if not all_points:
+        raise RuntimeError("No points generated — check depth maps and poses.")
+
+    # ── merge and save ─────────────────────────────────────────────────
+    logger.info("Merging %d points from %d frames...", total_pts, len(all_points))
+    points = np.concatenate(all_points)
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+
+    if all_colors:
+        colors_arr = np.concatenate(all_colors)
+        pcd.colors = o3d.utility.Vector3dVector(colors_arr.astype(np.float64) / 255.0)
+
+    o3d.io.write_point_cloud(str(ply_path), pcd)
+    logger.info("Stage 07 complete: %d points -> %s", total_pts, ply_path)
+
+    # ── artifacts ──────────────────────────────────────────────────────
+    context["artifacts"]["dense_pointcloud"] = str(ply_path)
+    return context
