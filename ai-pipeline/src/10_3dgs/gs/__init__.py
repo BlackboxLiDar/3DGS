@@ -1,3 +1,108 @@
+"""Stage 10: 3D Gaussian Splatting Training — background reconstruction.
+
+Trains a 3DGS model using Inria gaussian-splatting with mask-based loss
+exclusion to suppress floaters on dynamic objects (vehicles, pedestrians).
+"""
+
+import logging
+import subprocess
+import sys
+import traceback
+from pathlib import Path
+
+from .data_prep import prepare_scene_dir
+
+logger = logging.getLogger(__name__)
+
+
 def run(context):
-    """Stage entrypoint. Implement later."""
-    raise NotImplementedError("Stage not implemented yet.")
+    """Stage 10 entry point.
+
+    Reads:
+        context["artifacts"]["images_3dgs"]          — subsampled registered frames
+        context["artifacts"]["segmentation_masks"]    — binary masks (white=dynamic)
+        context["artifacts"]["colmap_model_dir"]      — sparse/0/ (cameras.bin, images.bin)
+        context["artifacts"]["filtered_pointcloud"]   — filtered.ply (initial PC)
+
+    Writes:
+        context["artifacts"]["output_ply"]            — trained 3DGS point_cloud.ply
+        context["artifacts"]["gs_model_dir"]          — model output directory
+    """
+    try:
+        return _run_impl(context)
+    except Exception:
+        logger.error("Stage 10 failed:\n%s", traceback.format_exc())
+        raise
+
+
+def _run_impl(context):
+    images_dir = Path(context["artifacts"]["images_3dgs"])
+    masks_dir = Path(context["artifacts"]["segmentation_masks"])
+    colmap_model_dir = Path(context["artifacts"]["colmap_model_dir"])
+    filtered_ply = Path(context["artifacts"]["filtered_pointcloud"])
+
+    out_root = Path(context["out_root"])
+    workspace = out_root / "10_3dgs"
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    scene_dir = workspace / "scene"
+    model_dir = workspace / "model"
+
+    # ── 1. Prepare COLMAP-compatible directory structure ───────────────
+    logger.info("Stage 10: Preparing scene directory...")
+    prepare_scene_dir(
+        scene_dir=scene_dir,
+        images_dir=images_dir,
+        masks_dir=masks_dir,
+        colmap_model_dir=colmap_model_dir,
+        filtered_ply=filtered_ply,
+    )
+
+    # ── 2. Run 3DGS training ──────────────────────────────────────────
+    ITERATIONS = 30_000
+    SAVE_ITERATIONS = [7_000, 30_000]
+
+    train_script = Path(__file__).parent / "train_masked.py"
+
+    cmd = [
+        sys.executable, str(train_script),
+        "--source_path", str(scene_dir),
+        "--model_path", str(model_dir),
+        "--mask_path", str(scene_dir / "masks"),
+        "--iterations", str(ITERATIONS),
+        "--save_iterations", *[str(i) for i in SAVE_ITERATIONS],
+        "--data_device", "cuda",
+    ]
+
+    logger.info("Stage 10: Starting 3DGS training (%d iterations)...", ITERATIONS)
+    logger.info("  cmd: %s", " ".join(cmd))
+
+    result = subprocess.run(cmd, check=True)
+
+    # ── 3. Register output artifacts ──────────────────────────────────
+    output_ply = model_dir / "point_cloud" / f"iteration_{ITERATIONS}" / "point_cloud.ply"
+
+    if not output_ply.exists():
+        raise FileNotFoundError(
+            f"Expected output not found: {output_ply}. "
+            f"Check training logs for errors."
+        )
+
+    n_gaussians = _count_ply_vertices(output_ply)
+    logger.info("Stage 10 complete: %s (%d Gaussians)", output_ply, n_gaussians)
+
+    context["artifacts"]["output_ply"] = str(output_ply)
+    context["artifacts"]["gs_model_dir"] = str(model_dir)
+    return context
+
+
+def _count_ply_vertices(ply_path: Path) -> int:
+    """Read vertex count from PLY header."""
+    with open(ply_path, "rb") as f:
+        for line in f:
+            line = line.decode("ascii", errors="ignore").strip()
+            if line.startswith("element vertex"):
+                return int(line.split()[-1])
+            if line == "end_header":
+                break
+    return -1

@@ -194,6 +194,32 @@ Output: 07_pointcloud/dense.ply (192MB, XYZ+RGB)
 
 ---
 
+## Stage 08 — Point Cloud Filtering
+
+**상태:** ✅ 정상
+
+### 실행 결과
+```
+입력: 7,448,738 points (dense.ply, 192MB)
+Statistical Outlier Removal: nb_neighbors=20, std_ratio=2.0
+제거: 139,914 outliers (1.9%)
+출력: 7,308,824 points (filtered.ply)
+소요: ~6초
+```
+
+### 주요 파라미터
+| 파라미터 | 값 | 비고 |
+|---------|-----|------|
+| nb_neighbors | 20 | 각 점의 이웃 수 |
+| std_ratio | 2.0 | 표준편차 배수 |
+
+### 평가
+- 1.9% 제거는 양호 (일반적 1-5% 범위)
+- Voxel downsampling 후 극단적 아웃라이어만 소량 제거됨
+- 7.3M points로 3DGS 학습 초기화에 적합
+
+---
+
 ## 종합 요약
 
 | Stage | 상태 | 비고 |
@@ -203,8 +229,9 @@ Output: 07_pointcloud/dense.ply (192MB, XYZ+RGB)
 | 04 COLMAP | ✅ 정상 | 품질 메트릭 출력, loop detection 고려 |
 | 05 Depth | ⚠️ 주의 | per-frame normalization, global 고려 |
 | 06 Scale | ✅ 수정완료 | sparse point ground plane + scene-extent threshold |
-| 07 Pointcloud | ✅ 정상 | voxel downsampling 0.05m 적용 |
+| 07 Pointcloud | ✅ 정상 | voxel downsampling 0.1m, 7.4M points |
+| 08 Filtering | ✅ 정상 | 1.9% outlier 제거, 7.3M points |
 
 ### 다음 단계
-- **Track A (배경 복원):** Stage 08 → 10 → 11 → 12
+- **Track A (배경 복원):** Stage 10 → 11 → 12
 - **Track B (궤적 추출):** Stage 09 → 12

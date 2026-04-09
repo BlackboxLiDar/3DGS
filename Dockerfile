@@ -39,6 +39,14 @@ RUN pip3 install --no-cache-dir "numpy>=1.24,<2" && \
     -r requirements.txt && \
     pip3 install --no-cache-dir --no-build-isolation waymo-open-dataset-tf-2-12-0
 
+# 3D Gaussian Splatting + CUDA extensions
+RUN git clone --recursive https://github.com/graphdeco-inria/gaussian-splatting.git \
+        /workspace/third_party/gaussian-splatting && \
+    cd /workspace/third_party/gaussian-splatting && \
+    pip3 install --no-cache-dir submodules/diff-gaussian-rasterization && \
+    pip3 install --no-cache-dir submodules/simple-knn && \
+    pip3 install --no-cache-dir plyfile
+
 # Copy project
 COPY . .
 
