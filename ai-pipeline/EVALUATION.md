@@ -167,9 +167,9 @@ Pass 2: ground candidates = 117 / 4230 sparse points (bottom 40%, min 1 frame)
 ```
 199 registered frames backprojected (step=2)
 Raw points: 122,265,600 (122M)
-Voxel downsampling: voxel_size=0.05m
-After downsampling: TBD (실행 후 업데이트)
-Output: 07_pointcloud/dense.ply
+Voxel downsampling: voxel_size=0.1m
+After downsampling: 7,448,738 (7.4M, 6.1% of original)
+Output: 07_pointcloud/dense.ply (192MB, XYZ+RGB)
 ```
 
 ### 주요 파라미터
