@@ -169,6 +169,7 @@ def train(args_list: list[str]):
                         0.005,  # min_opacity
                         scene.cameras_extent,
                         size_threshold,
+                        radii,
                     )
 
                 if iteration % opt.opacity_reset_interval == 0:
