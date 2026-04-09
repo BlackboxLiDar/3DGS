@@ -5,6 +5,8 @@ import shutil
 import struct
 from pathlib import Path
 
+import numpy as np
+
 logger = logging.getLogger(__name__)
 
 
@@ -165,6 +167,60 @@ def _filter_images_bin(src: Path, dst: Path, keep_names: set[str]):
     logger.info("  images.bin: %d/%d frames kept", len(kept_entries), num_images)
 
 
+def _convert_ply_for_gs(src: Path, dst: Path):
+    """Convert Open3D PLY to gaussian-splatting compatible format.
+
+    gaussian-splatting's fetchPly() requires: float x,y,z + float nx,ny,nz + uchar red,green,blue.
+    Open3D writes: double x,y,z + uchar red,green,blue (no normals).
+    We use plyfile's storePly convention for compatibility.
+    """
+    import open3d as o3d
+
+    pcd = o3d.io.read_point_cloud(str(src))
+    xyz = np.asarray(pcd.points, dtype=np.float32)
+    colors = np.asarray(pcd.colors)  # 0-1 float64
+
+    # Convert colors to uint8
+    rgb = (colors * 255).clip(0, 255).astype(np.uint8) if len(colors) > 0 else np.zeros((len(xyz), 3), dtype=np.uint8)
+
+    # Zero normals
+    normals = np.zeros_like(xyz, dtype=np.float32)
+
+    n = len(xyz)
+    logger.info("  Converting PLY for gaussian-splatting: %d points", n)
+
+    # Write PLY with the exact property names gaussian-splatting expects.
+    # Use numpy structured array for fast bulk write.
+    dtype = np.dtype([
+        ("x", "<f4"), ("y", "<f4"), ("z", "<f4"),
+        ("nx", "<f4"), ("ny", "<f4"), ("nz", "<f4"),
+        ("red", "u1"), ("green", "u1"), ("blue", "u1"),
+    ])
+    data = np.zeros(n, dtype=dtype)
+    data["x"], data["y"], data["z"] = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+    data["red"], data["green"], data["blue"] = rgb[:, 0], rgb[:, 1], rgb[:, 2]
+    # nx, ny, nz remain zero
+
+    with open(dst, "wb") as f:
+        header = (
+            "ply\n"
+            "format binary_little_endian 1.0\n"
+            f"element vertex {n}\n"
+            "property float x\n"
+            "property float y\n"
+            "property float z\n"
+            "property float nx\n"
+            "property float ny\n"
+            "property float nz\n"
+            "property uchar red\n"
+            "property uchar green\n"
+            "property uchar blue\n"
+            "end_header\n"
+        )
+        f.write(header.encode("ascii"))
+        f.write(data.tobytes())
+
+
 def prepare_scene_dir(
     scene_dir: Path,
     images_dir: Path,
@@ -226,10 +282,12 @@ def prepare_scene_dir(
         if src.exists():
             filterer(src, sparse_dir / name, keep_names)
 
-    # Use our filtered dense PC as the initial point cloud
+    # Convert filtered PC to gaussian-splatting compatible PLY format.
+    # gaussian-splatting's fetchPly() expects: float x,y,z + uchar red,green,blue + float nx,ny,nz
+    # Our Open3D PLY has double x,y,z + uchar red,green,blue (no normals).
     dst_ply = sparse_dir / "points3D.ply"
-    shutil.copy2(filtered_ply, dst_ply)
-    logger.info("  points3D.ply <- %s", filtered_ply)
+    _convert_ply_for_gs(filtered_ply, dst_ply)
+    logger.info("  points3D.ply <- %s (converted for gaussian-splatting)", filtered_ply)
 
     # Remove points3D.bin/.txt if present (force PLY loading)
     for ext in [".bin", ".txt"]:
