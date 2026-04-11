@@ -10,3 +10,6 @@ node_modules/
 /ai-pipeline/third_party/
 CLAUDE.md
 tools/
+
+*.docx
+~$*.docx
