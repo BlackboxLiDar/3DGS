@@ -120,6 +120,11 @@ _ARTIFACT_PATHS = {
     "depth_vis":          "05_depth/depth_vis",
     "scaled_depth_maps":  "06_scale/scaled_depth_maps",
     "scaled_depth_vis":   "06_scale/scaled_depth_vis",
+    "dense_pointcloud":   "07_pointcloud/dense.ply",
+    "filtered_pointcloud":"08_filtering/filtered.ply",
+    "output_ply":         "10_3dgs/model/point_cloud/iteration_30000/point_cloud.ply",
+    "gs_model_dir":       "10_3dgs/model",
+    "output_splat":       "11_format/output.splat",
 }
 
 
